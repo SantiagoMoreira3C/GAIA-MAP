@@ -1,0 +1,12 @@
+▲ Next.js 16.3.4
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+✓ Ready in 0ms
+✓ Running next.config took 35ms
+[OSIRIS] michigan fetch failed with no cache to fall back on: Error: MiDrive HTTP 403
+    at af (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\standalone\dist\server\chunks\_1wlbxb5._.js:1:156039)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\standalone\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\standalone\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async ea (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\standalone\dist\server\chunks\_1wlbxb5._.js:12:126018)
+    at async Y (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\standalone\dist\server\chunks\_1wlbxb5._.js:12:129924)
+^C

@@ -1,0 +1,160 @@
+
+> gaia-siap@0.1.0 start
+> next start
+
+⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+▲ Next.js 16.3.4
+- Local:         http://localhost:3000
+- Network:       http://10.8.0.8:3000
+✓ Ready in 237ms
+✓ Running next.config.ts took 55ms
+⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+⚠ "next start" does not work with "output: standalone" configuration. Use "node .next/standalone/server.js" instead.
+[OSIRIS] Ville MTL returned 403 — absent from this refresh, not retried
+[OSIRIS] 511 Alberta returned 400 — absent from this refresh, not retried
+[OSIRIS] Netherlands cameras — Rijkswaterstaat: 26
+[OSIRIS] michigan fetch failed with no cache to fall back on: Error: MiDrive HTTP 403
+    at af (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:156039)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async ea (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:12:126018)
+    at async Y (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:12:129924)
+[OSIRIS] michigan fetch failed with no cache to fall back on: Error: MiDrive HTTP 403
+    at af (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:156039)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async ea (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:12:126018)
+    at async Y (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:12:129924)
+Failed to set Next.js data cache for http://localhost:3000/api/satellites, items over 2MB can not be cached (3657346 bytes)
+[OSIRIS] Oregon cameras — ODOT TripCheck: 1131
+[OSIRIS] Indiana cameras — INDOT TrafficWise: 713
+[OSIRIS] Taiwan cameras — THB: 2175, YouTube: 4
+[OSIRIS] cctv:netherlands fetch failed with no cache to fall back on: Error [AbortError]: This operation was aborted
+    at async n (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0v2txfe._.js:1:4688)
+    at async u (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:1198)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229) {
+  code: 20,
+  INDEX_SIZE_ERR: 1,
+  DOMSTRING_SIZE_ERR: 2,
+  HIERARCHY_REQUEST_ERR: 3,
+  WRONG_DOCUMENT_ERR: 4,
+  INVALID_CHARACTER_ERR: 5,
+  NO_DATA_ALLOWED_ERR: 6,
+  NO_MODIFICATION_ALLOWED_ERR: 7,
+  NOT_FOUND_ERR: 8,
+  NOT_SUPPORTED_ERR: 9,
+  INUSE_ATTRIBUTE_ERR: 10,
+  INVALID_STATE_ERR: 11,
+  SYNTAX_ERR: 12,
+  INVALID_MODIFICATION_ERR: 13,
+  NAMESPACE_ERR: 14,
+  INVALID_ACCESS_ERR: 15,
+  VALIDATION_ERR: 16,
+  TYPE_MISMATCH_ERR: 17,
+  SECURITY_ERR: 18,
+  NETWORK_ERR: 19,
+  ABORT_ERR: 20,
+  URL_MISMATCH_ERR: 21,
+  QUOTA_EXCEEDED_ERR: 22,
+  TIMEOUT_ERR: 23,
+  INVALID_NODE_TYPE_ERR: 24,
+  DATA_CLONE_ERR: 25
+}
+[OSIRIS] newzealand fetch failed with no cache to fall back on: TypeError: fetch failed
+    at async n (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0v2txfe._.js:1:4688)
+    at async ab (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:153876)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229) {
+  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: trafficnz.info:443, timeout: 10000ms)
+      at ignore-listed frames {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[OSIRIS] cctv:us-central over 12000ms — returning without it
+[OSIRIS] cctv:canada over 12000ms — returning without it
+[OSIRIS] cctv:europe over 12000ms — returning without it
+[OSIRIS] cctv:utah over 12000ms — returning without it
+[OSIRIS] cctv:nevada over 12000ms — returning without it
+[OSIRIS] cctv:louisiana over 12000ms — returning without it
+[OSIRIS] cctv:florida over 12000ms — returning without it
+[OSIRIS] cctv:georgia over 12000ms — returning without it
+[OSIRIS] cctv:northcarolina over 12000ms — returning without it
+[OSIRIS] cctv:arizona over 12000ms — returning without it
+[OSIRIS] cctv:eastasia over 12000ms — returning without it
+[OSIRIS] cctv:seasia over 12000ms — returning without it
+[OSIRIS] cctv:westasia over 12000ms — returning without it
+[OSIRIS] RSS Fetch Error for http://feeds.bbci.co.uk/news/world/rss.xml: The operation was aborted due to timeout
+[OSIRIS] RSS Fetch Error for https://www.aljazeera.com/xml/rss/all.xml: The operation was aborted due to timeout
+[OSIRIS] RSS Fetch Error for https://rss.nytimes.com/services/xml/rss/nyt/World.xml: The operation was aborted due to timeout
+[OSIRIS] Mapped 0 conflict events from RSS.
+[OSIRIS] northcarolina fetch failed with no cache to fall back on: Error [AbortError]: This operation was aborted
+    at async n (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0v2txfe._.js:1:4688)
+    at async an (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:74102)
+    at async at (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:74417)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229) {
+  code: 20,
+  INDEX_SIZE_ERR: 1,
+  DOMSTRING_SIZE_ERR: 2,
+  HIERARCHY_REQUEST_ERR: 3,
+  WRONG_DOCUMENT_ERR: 4,
+  INVALID_CHARACTER_ERR: 5,
+  NO_DATA_ALLOWED_ERR: 6,
+  NO_MODIFICATION_ALLOWED_ERR: 7,
+  NOT_FOUND_ERR: 8,
+  NOT_SUPPORTED_ERR: 9,
+  INUSE_ATTRIBUTE_ERR: 10,
+  INVALID_STATE_ERR: 11,
+  SYNTAX_ERR: 12,
+  INVALID_MODIFICATION_ERR: 13,
+  NAMESPACE_ERR: 14,
+  INVALID_ACCESS_ERR: 15,
+  VALIDATION_ERR: 16,
+  TYPE_MISMATCH_ERR: 17,
+  SECURITY_ERR: 18,
+  NETWORK_ERR: 19,
+  ABORT_ERR: 20,
+  URL_MISMATCH_ERR: 21,
+  QUOTA_EXCEEDED_ERR: 22,
+  TIMEOUT_ERR: 23,
+  INVALID_NODE_TYPE_ERR: 24,
+  DATA_CLONE_ERR: 25
+}
+[OSIRIS] no OpenSky snapshot — falling back to adsb.fi regional sweep
+[OSIRIS] Nevada cameras — NDOT: 200
+[OSIRIS] IDOT failed — absent from this refresh: This operation was aborted
+[OSIRIS] GDACS fetch error: TypeError: fetch failed
+    at async a (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__07-lz04._.js:1:1596)
+    at async Q (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__07-lz04._.js:1:6038)
+    at async Z (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__07-lz04._.js:1:7116) {
+  [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: www.gdacs.org:443, timeout: 10000ms)
+      at ignore-listed frames {
+    code: 'UND_ERR_CONNECT_TIMEOUT'
+  }
+}
+[OSIRIS] Louisiana cameras — LADOTD: 200
+[OSIRIS] West & Central Asia cameras — OpenCCTV: 0 of 1336 in region
+[OSIRIS] Southeast Asia cameras — OpenCCTV: 0 of 7619 in region
+[OSIRIS] East Asia cameras — OpenCCTV: 50 of 23860 in region
+[OSIRIS] cctv:canada over 12000ms — returning without it
+[OSIRIS] cctv:florida over 12000ms — returning without it
+[OSIRIS] cctv:georgia over 12000ms — returning without it
+[OSIRIS] cctv:arizona over 12000ms — returning without it
+Failed to set Next.js data cache for http://localhost:3000/api/cctv, items over 2MB can not be cached (4332083 bytes)
+[OSIRIS] DriveBC failed — absent from this refresh: This operation was aborted
+[OSIRIS] ADOT cameras: 644 of 644
+[OSIRIS] michigan fetch failed with no cache to fall back on: Error: MiDrive HTTP 403
+    at af (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:1:156039)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\[root-of-the-server]__0a4l_vd._.js:1:3229)
+    at async ea (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:12:126018)
+    at async Y (C:\Users\SM\Documents\Python Scripts\MAPA_INTERACTIVO\osiris\dist\server\chunks\_1wlbxb5._.js:12:129924)
+[OSIRIS] Southeast Asia cameras — OpenCCTV: 800 of 7619 in region
+[OSIRIS] West & Central Asia cameras — OpenCCTV: 600 of 1336 in region
+[OSIRIS] Netherlands cameras — Rijkswaterstaat: 26
+[OSIRIS] NCDOT cameras: 1138 of 1138
+[OSIRIS] FDOT cameras: 4953 of 4953
+[OSIRIS] New Zealand cameras — NZTA: 256
+[OSIRIS] GDOT cameras: 4043 of 4043
+[OSIRIS] every flight provider returned zero aircraft — set OPENSKY_CLIENT_ID/OPENSKY_CLIENT_SECRET (free at opensky-network.org); the anonymous 400 credits/day pool cannot sustain a live map
+^C^C
