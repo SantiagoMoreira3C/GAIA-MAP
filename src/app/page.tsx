@@ -63,28 +63,31 @@ function useIsMobile() {
 }
 const UptimeClock = () => {
   const [uptime, setUptime] = useState('00:00:00');
-  const startTime = useRef(0);
-  if (startTime.current === 0) startTime.current = Date.now();
+  const startTime = useRef<number | null>(null);
   useEffect(() => {
+    startTime.current = Date.now();
     const iv = setInterval(() => {
+      if (startTime.current === null) return;
       const e = Math.floor((Date.now() - startTime.current) / 1000);
       setUptime(`${String(Math.floor(e/3600)).padStart(2,'0')}:${String(Math.floor((e%3600)/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`);
     }, 1000);
     return () => clearInterval(iv);
   }, []);
-  return <span className="hidden lg:inline">UPTIME: <span className="text-[var(--gold-primary)]">{uptime}</span></span>;
+  return <span suppressHydrationWarning className="hidden lg:inline">UPTIME: <span className="text-[var(--gold-primary)]">{uptime}</span></span>;
 };
 
 const ZuluClock = () => {
-  const [time, setTime] = useState('');
+  const [time, setTime] = useState('ZULU --:--:--Z');
   useEffect(() => {
-    const iv = setInterval(() => {
+    const tick = () => {
       const now = new Date();
       setTime(`ZULU ${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}:${String(now.getUTCSeconds()).padStart(2,'0')}Z`);
-    }, 1000);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, []);
-  return <span className="text-[var(--cyan-primary)] font-bold tabular-nums">{time || 'ZULU --:--:--Z'}</span>;
+  return <span suppressHydrationWarning className="text-[var(--cyan-primary)] font-bold tabular-nums">{time}</span>;
 };
 
 /** Real entity count — no fake throughput metrics */
@@ -272,6 +275,7 @@ export default function Dashboard() {
   const [drawnPolygons, setDrawnPolygons] = useState<DrawnShape[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [osirisTheme, setOsirisTheme] = useState<'core'|'ghost'>('core');
+  const [ipLocation, setIpLocation] = useState<{ lat: number; lng: number; city?: string; country?: string } | null>(null);
   // ── GAIA SIAP ──
   const [siapInspectors, setSiapInspectors] = useState<SiapInspector[]>([]);
   const [siapSelected, setSiapSelected] = useState<string | null>(null);
@@ -292,20 +296,36 @@ export default function Dashboard() {
     if (saved) applySettings(saved);
   }, []);
 
-  // GAIA SIAP fetch
+  // GAIA SIAP fetch — solo datos, el vuelo intro lo maneja el efecto dedicado abajo
   useEffect(() => {
-    fetch('/api/siap')
-      .then(r => r.json())
+    fetch('/api/siap', { cache: 'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error(`SIAP ${r.status}`);
+        return r.json();
+      })
       .then((d: any) => {
-        if (d.inspectors) {
+        if (d.inspectors?.length) {
           setSiapInspectors(d.inspectors);
-          if (!siapSelected && d.inspectors[0]) setSiapSelected(d.inspectors[0].id);
           dataRef.current = { ...dataRef.current, siap_inspectors: d.inspectors, siap_points: d.inspectors.flatMap((i:any)=>i.points) };
           setDataVersion(v=>v+1);
+        } else {
+          console.warn('[GAIA SIAP] Respuesta sin inspectors:', d);
         }
-        if (!autoLocateCancelled.current) setTimeout(() => { if (!autoLocateCancelled.current) setFlyToLocation({ lat: -0.963, lng: -80.712, zoom: 12, ts: Date.now() }); }, 4000);
       })
-      .catch(()=>{});
+      .catch(e => {
+        console.warn('[GAIA SIAP] fetch failed:', e instanceof Error ? e.message : e);
+      });
+  }, []);
+
+  // ── INTRO CINEMATOGRÁFICO: globo mundo 2.5s → vuelo 2.5s a Manta (3D) ──
+  // Respeta autoLocateCancelled (usuario movió mapa/teclado) y prioriza Manta sobre IP.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (autoLocateCancelled.current) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
+      setFlyToLocation({ lat: -0.963, lng: -80.712, zoom: 13, ts: Date.now() });
+    }, 5000); // 2500 splash + 2500 globo visible = 5000 total
+    return () => clearTimeout(t);
   }, []);
 
   const isMobile = useIsMobile();
@@ -376,7 +396,7 @@ export default function Dashboard() {
     return () => clearTimeout(splashTimer);
   }, []);
 
-  // On mount: geolocate by IP and fly to user's city (after splash/map init)
+  // On mount: capas desde URL + punto luminoso IP (no roba cámara intro Manta)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -399,23 +419,23 @@ export default function Dashboard() {
       .then(p => { if (p) setCapabilities(c => ({ ...c, cloudflare: !!p.configured })); })
       .catch(() => { /* leave the layer hidden */ });
 
-    // Once the user interacts, a late IP-location response must not steal the
-    // camera back. The request is also cancelled when this page unmounts.
+    // IP geo: ya no roba la cámara intro (2.5s globo → Manta). Solo deja punto luminoso
+    // para que el operador vea dónde está por IP y pueda volar con GPS si quiere.
     const geoController = new AbortController();
     const cancelAutoLocate = () => { autoLocateCancelled.current = true; };
     window.addEventListener('pointerdown', cancelAutoLocate, { once: true });
     window.addEventListener('keydown', cancelAutoLocate, { once: true });
     const geoTimer = setTimeout(() => {
-      if (autoLocateCancelled.current) return;
       fetch('/api/geo', { signal: geoController.signal })
         .then(r => r.json())
         .then(geo => {
-          if (!autoLocateCancelled.current && !geoController.signal.aborted && geo.status === 'success' &&
+          if (geoController.signal.aborted) return;
+          if (geo.status === 'success' &&
               Number.isFinite(geo.lat) && Number.isFinite(geo.lon) && Math.abs(geo.lat) <= 90 && Math.abs(geo.lon) <= 180) {
-            setFlyToLocation({ lat: geo.lat, lng: geo.lon, zoom: 8, ts: Date.now() });
+            setIpLocation({ lat: geo.lat, lng: geo.lon, city: geo.city, country: geo.country });
           }
         })
-        .catch(() => { /* silent — keep default global view */ });
+        .catch(() => { /* silent — punto IP opcional */ });
     }, 3000);
 
     return () => {
@@ -520,12 +540,12 @@ export default function Dashboard() {
     return (toDeg(Math.atan2(y,x)) + 360) % 360;
   }, []);
   const handleSiapPointClick = useCallback((pt: SiapPoint, ins: SiapInspector) => {
-    setFlyToLocation({ lat: pt.lat, lng: pt.lng, zoom: 15, ts: Date.now() });
+    // Click manual sobre card/punto: zoom 14 (menos agresivo que 15) para ver contexto
+    setFlyToLocation({ lat: pt.lat, lng: pt.lng, zoom: 14, ts: Date.now() });
     const idx = ins.points.findIndex(p=>p.id===pt.id);
     const next = idx >=0 && idx < ins.points.length-1 ? ins.points[idx+1] : null;
     const heading = next ? bearing([pt.lng, pt.lat], [next.lng, next.lat]) : 0;
     setSiapPlaybackDot({ lng: pt.lng, lat: pt.lat, inspectorId: ins.id, heading, vehicle: ins.vehicle });
-    // trail hasta este punto
     const trailCoords = ins.points.slice(0, idx+1).map(p=> [p.lng, p.lat] as [number, number]);
     if (trailCoords.length >=2) setSiapTrail({ type: 'LineString', coordinates: trailCoords, color: ins.color });
     else setSiapTrail(null);
@@ -539,8 +559,16 @@ export default function Dashboard() {
       to: { lng: coords[coords.length-1][0], lat: coords[coords.length-1][1] } as any,
       distance: 0, duration: 0, steps: [] as any, provider: 'siap', mode
     } as any);
-    setShowDirections(true);
-    // inicia trail y dot en el primer punto con dirección hacia el segundo
+    setShowDirections(false);
+    // Vista amplia para ver todo el rango donde se mueve (no zoom 15 pegado)
+    // Calcula centro/bounds del recorrido y pide zoom ~12.5 con pitch suave
+    const lats = coords.map(c=>c[1]), lngs = coords.map(c=>c[0]);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    // margen amplio: la animación dot se verá siempre dentro del viewport
+    setFlyToLocation({ lat: centerLat, lng: centerLng, zoom: 12.3, ts: Date.now() });
     const first = ins.points[0];
     if (first) {
       const heading = ins.points[1] ? bearing([first.lng, first.lat], [ins.points[1].lng, ins.points[1].lat]) : 0;
@@ -1046,9 +1074,6 @@ export default function Dashboard() {
   return (
     <main className="fixed inset-0 w-full h-full bg-[var(--bg-void)] overflow-hidden">
 
-      {/* ── Manta quick fly ── */}
-      <button onClick={() => setFlyToLocation({ lat: -0.963, lng: -80.712, zoom: 13, ts: Date.now() })} className="fixed bottom-4 left-4 z-30 hidden lg:flex items-center gap-2 px-3 py-2 rounded-full bg-[#17A7D2] text-white text-xs font-mono font-bold shadow-lg hover:bg-[#1490B8] transition-colors"> <MapPinned className="w-4 h-4"/> MANTA · SIAP </button>
-      <button onClick={() => setShowSiap((v: boolean) => !v)} className="fixed bottom-4 right-4 lg:bottom-auto lg:top-[64px] lg:right-[380px] z-30 flex items-center gap-2 px-3 py-2 rounded-full border text-xs font-mono font-bold shadow-lg transition-colors" style={{ background: showSiap ? '#17A7D2' : 'rgba(0,0,0,0.6)', color: '#fff', borderColor: showSiap ? '#17A7D2' : 'rgba(255,255,255,0.15)', backdropFilter: 'blur(12px)' }}> <MapPinned className="w-4 h-4"/> {showSiap ? 'OCULTAR SIAP' : 'VER SIAP'} </button>
       {/* ── SPLASH ── */}
       <AnimatePresence>
         {showSplash && (
@@ -1286,6 +1311,7 @@ export default function Dashboard() {
           onDrawComplete={handleDrawComplete}
           drawnPolygons={drawnPolygons}
           aircraftAirports={aircraftAirports}
+          ipLocation={ipLocation}
         />
       </ErrorBoundary>
 
@@ -1471,6 +1497,7 @@ export default function Dashboard() {
             speed={siapSpeed}
             setSpeed={setSiapSpeed}
             onClose={() => setShowSiap(false)}
+            onCenterManta={() => setFlyToLocation({ lat: -0.963, lng: -80.712, zoom: 13, ts: Date.now() })}
           />
         </div>
       )}
@@ -1481,6 +1508,20 @@ export default function Dashboard() {
 
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
+        {/* SIAP — MOSTRAR / OCULTAR (reemplaza botones flotantes inferiores) */}
+        <div className="relative group">
+          <button onClick={() => setShowSiap((v: boolean) => !v)} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showSiap ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title="SIAP — MOSTRAR / OCULTAR panel inspecciones Manta" aria-label="SIAP — MOSTRAR / OCULTAR" aria-expanded={showSiap}>
+            <MapPinned className={`w-4 h-4 ${showSiap ? 'text-[#17A7D2]' : 'text-white/60'}`} />
+            {showSiap && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[#17A7D2]"
+              />
+            )}
+          </button>
+          <span className="absolute right-11 top-1/2 -translate-y-1/2 px-2 py-1 text-[9px] font-mono tracking-wider text-white/80 bg-black/80 backdrop-blur-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none">{showSiap ? 'OCULTAR SIAP' : 'MOSTRAR SIAP'}</span>
+        </div>
+        <div className="w-4 h-px bg-white/10 mx-auto" />
         <div className="relative group">
           <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`} title="OSINT Recon — IP lookup, network sweep, geolocation" aria-label="OSINT Recon" aria-expanded={showIntel}>
             <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />

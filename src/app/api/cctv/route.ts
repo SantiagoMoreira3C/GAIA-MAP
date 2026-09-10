@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { stealthFetch } from '@/lib/stealthFetch';
 import { cachedSource } from '@/lib/sourceCache';
 
+// CCTV route supera 2 MB (10 MB en region=all) → Next data-cache no lo admite. Forzar no-store.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 export const maxDuration = 60;
 import { fetchAsfinagCameras } from './asfinag';
 import { fetchNetherlandsCameras } from './netherlands';
@@ -706,9 +711,9 @@ export async function GET(request: Request) {
       }
     }
 
-    const cacheControl = pendingRegions.length > 0 || allCameras.length < 50
-      ? 'no-store, max-age=0' 
-      : 'public, s-maxage=300, stale-while-revalidate=600';
+    // Evita que Next intente cachear >2 MB (error visto: 10_275_291 bytes). Siempre no-store aquí;
+    // el caché real es el in-memory de sourceCache (30 min) en src/lib/sourceCache.ts.
+    const cacheControl = 'no-store, max-age=0';
 
     return NextResponse.json({
       cameras: allCameras,

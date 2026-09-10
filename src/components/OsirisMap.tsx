@@ -73,6 +73,8 @@ interface OsirisMapProps {
   } | null;
   /** Live position from the browser — drawn as a pulsing dot with accuracy ring. */
   userLocation?: { lat: number; lng: number; accuracy?: number; heading?: number | null } | null;
+  /** Where the IP thinks you are — amber pulsing dot that never steals the intro camera */
+  ipLocation?: { lat: number; lng: number; city?: string; country?: string } | null;
   /** Keep the camera centred on userLocation as it moves. */
   followUser?: boolean;
   /** Fired when the operator pans/zooms/rotates while follow mode is on. */
@@ -110,7 +112,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onRetryMap, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, siapPlayback = null, siapTrail = null, siapFilter = null }: OsirisMapProps) {
+function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onRetryMap, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, ipLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, siapPlayback = null, siapTrail = null, siapFilter = null }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -255,12 +257,11 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     const baseOptions = {
       container,
       style: styleUrl,
-      center: [25.48, 42.70] as [number, number], zoom: 6.5, minZoom: 1.5, maxZoom: 18,
+      // Intro globo: mundo completo 3D (zoom 1.5) centrado Atlántico para ver Américas
+      center: [-30, 15] as [number, number], zoom: 1.5, minZoom: 1.2, maxZoom: 18,
       attributionControl: false as const,
-      // Keep the supported pitch range from the start; terrain must not flatten
-      // an already-positioned camera when its performance limits are attached.
       maxPitch: 60,
-      pitch: 20,
+      pitch: 0,
     };
 
     // MapLibre asks for a high-performance WebGL2 context and throws outright if it
@@ -865,21 +866,21 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.2], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
-      // ── SIAP — Recorridos inspectores (Manta) ──
-      map.addLayer({ id: 'siap-route-casing', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#001014', 'line-width': ['interpolate',['linear'],['zoom'], 5, 5, 12, 9], 'line-opacity': 0.85 }});
-      map.addLayer({ id: 'siap-route-line', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 3, 12, 6], 'line-opacity': 0.95 }});
-      map.addLayer({ id: 'siap-route-dash', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': ['interpolate',['linear'],['zoom'], 5, 1.2, 12, 2], 'line-opacity': 0.35, 'line-dasharray': [2, 4] }});
+      // ── SIAP — Recorridos inspectores (Manta) ── base ruta atenuada para que destaque el playback
+      map.addLayer({ id: 'siap-route-casing', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#001014', 'line-width': ['interpolate',['linear'],['zoom'], 5, 5, 12, 9], 'line-opacity': 0.45 }});
+      map.addLayer({ id: 'siap-route-line', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 2.5, 12, 5], 'line-opacity': 0.38 }});
+      map.addLayer({ id: 'siap-route-dash', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': ['interpolate',['linear'],['zoom'], 5, 1, 12, 1.6], 'line-opacity': 0.18, 'line-dasharray': [2, 6] }});
       map.addLayer({ id: 'siap-point-glow', type: 'circle', source: 'siap-points', paint: { 'circle-radius': ['interpolate',['linear'],['zoom'], 8, 10, 12, 18, 16, 28], 'circle-color': ['match',['get','impacto'],'critico','#D32F2F','alto','#FF6F00','medio','#FFC400','#00C853'], 'circle-opacity': 0.18, 'circle-blur': 1 }});
       map.addLayer({ id: 'siap-point-dots', type: 'circle', source: 'siap-points', paint: { 'circle-radius': ['interpolate',['linear'],['zoom'], 8, 5, 12, 8, 16, 12], 'circle-color': ['match',['get','impacto'],'critico','#D32F2F','alto','#FF6F00','medio','#FFC400','#00C853'], 'circle-opacity': 0.95, 'circle-stroke-width': 2, 'circle-stroke-color': ['get','color'], 'circle-stroke-opacity': 0.9 }});
       // vehículo sobre el punto: moto vs persona
       map.addLayer({ id: 'siap-point-vehicle', type: 'symbol', source: 'siap-points', layout: { 'icon-image': ['match',['get','vehicle'],'moto','siap-moto','a pie','siap-walk','siap-moto'], 'icon-size': ['interpolate',['linear'],['zoom'], 10, 0.55, 14, 0.85, 16, 1.05], 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-anchor': 'center' }, paint: { 'icon-opacity': 0.95 }});
       map.addLayer({ id: 'siap-point-num', type: 'symbol', source: 'siap-points', layout: { 'text-field': ['to-string',['get','orden']], 'text-size': 8, 'text-font': ['JetBrains Mono Bold','Open Sans Bold'], 'text-allow-overlap': true, 'text-offset': [0, -1.2] }, paint: { 'text-color': '#FFFFFF', 'text-halo-color': '#000', 'text-halo-width': 1 }});
       map.addLayer({ id: 'siap-point-label', type: 'symbol', source: 'siap-points', minzoom: 12, layout: { 'text-field': ['get','titulo'], 'text-size': 9, 'text-font': ['Open Sans Regular'], 'text-offset': [0, 1.6], 'text-max-width': 14, 'text-allow-overlap': false }, paint: { 'text-color': '#E8E6E0', 'text-halo-color': '#000', 'text-halo-width': 1.2, 'text-opacity': 0.85 }});
-      map.addLayer({ id: 'siap-playback-trail-casing', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#001014', 'line-width': ['interpolate',['linear'],['zoom'], 5, 6, 12, 11], 'line-opacity': 0.85 }});
-      map.addLayer({ id: 'siap-playback-trail', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 4, 12, 7], 'line-opacity': 0.9 }});
-      map.addLayer({ id: 'siap-playback-trail-dash', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': 2, 'line-opacity': 0.5, 'line-dasharray': [1, 3] }});
-      // flecha direccional sobre la ruta recorrida
-      map.addLayer({ id: 'siap-playback-arrows', type: 'symbol', source: 'siap-playback-trail', layout: { 'symbol-placement': 'line', 'symbol-spacing': 60, 'icon-image': 'siap-arrow', 'icon-size': 0.7, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 0.9 }});
+      map.addLayer({ id: 'siap-playback-trail-casing', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#001014', 'line-width': ['interpolate',['linear'],['zoom'], 5, 7, 12, 12], 'line-opacity': 0.9 }});
+      map.addLayer({ id: 'siap-playback-trail', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 5, 12, 8], 'line-opacity': 1 }});
+      map.addLayer({ id: 'siap-playback-trail-dash', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': 2.2, 'line-opacity': 0.65, 'line-dasharray': [1, 3] }});
+      // flecha direccional sobre la ruta recorrida — más grande y frecuente para que se vea la animación
+      map.addLayer({ id: 'siap-playback-arrows', type: 'symbol', source: 'siap-playback-trail', layout: { 'symbol-placement': 'line', 'symbol-spacing': 40, 'icon-image': 'siap-arrow', 'icon-size': 0.95, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 1 }});
       map.addLayer({ id: 'siap-playback-glow', type: 'circle', source: 'siap-playback', paint: { 'circle-radius': 20, 'circle-color': ['get','color'], 'circle-opacity': 0.22, 'circle-blur': 0.9 }});
       map.addLayer({ id: 'siap-playback-dot', type: 'circle', source: 'siap-playback', paint: { 'circle-radius': 9, 'circle-color': ['get','color'], 'circle-opacity': 1, 'circle-stroke-width': 2, 'circle-stroke-color': '#FFFFFF' }});
       map.addLayer({ id: 'siap-playback-icon', type: 'symbol', source: 'siap-playback', layout: { 'icon-image': ['match',['get','vehicle'],'moto','siap-moto-play','a pie','siap-walk-play','siap-moto-play'], 'icon-size': 0.95, 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map', 'icon-rotate': ['get','heading'] }, paint: { 'icon-opacity': 1 }});
@@ -2473,10 +2474,15 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     map.easeTo({ zoom: Math.max(10.5, map.getZoom()), pitch: 45, duration: 650 });
   }, [mapReady, terrainFocus, terrainEnabled]);
 
-  // Fly-to
+  // Fly-to — intro Manta en 3D corto (2.5s) con pitch cinematográfico
   useEffect(() => {
     if (!mapReady || !mapRef.current || !flyToLocation) return;
-    mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom ?? 8, duration: 2000 });
+    const isManta = flyToLocation.zoom === 13 && Math.abs(flyToLocation.lat + 0.963) < 0.02 && Math.abs(flyToLocation.lng + 80.712) < 0.02;
+    if (isManta) {
+      mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: 13, pitch: 42, bearing: -12, duration: 2500, curve: 1.42, essential: true });
+    } else {
+      mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom ?? 8, duration: 2200 });
+    }
   }, [mapReady, flyToLocation]);
 
   // 3D buildings are independent of the elevation renderer.
@@ -2832,6 +2838,63 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [mapReady, userLocation]);
+
+  // ── IP LOCATION DOT (ámbar, no roba cámara) — indica dónde te ve la IP ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const SRC = 'ip-location';
+    const IDS = ['ip-dot-pulse', 'ip-dot', 'ip-dot-core', 'ip-label'];
+    if (!ipLocation) {
+      IDS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+      if (map.getSource(SRC)) map.removeSource(SRC);
+      return;
+    }
+    const { lat, lng, city, country } = ipLocation;
+    const point: any = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { city: city || '', country: country || '' }, geometry: { type: 'Point', coordinates: [lng, lat] } }] };
+    if (!map.getSource(SRC)) map.addSource(SRC, { type: 'geojson', data: point });
+    else (map.getSource(SRC) as maplibregl.GeoJSONSource).setData(point);
+    if (!map.getLayer('ip-dot-pulse')) {
+      map.addLayer({ id: 'ip-dot-pulse', type: 'circle', source: SRC, paint: { 'circle-radius': 14, 'circle-color': '#FFB300', 'circle-opacity': 0.22 } });
+    }
+    if (!map.getLayer('ip-dot')) {
+      map.addLayer({ id: 'ip-dot', type: 'circle', source: SRC, paint: { 'circle-radius': 7, 'circle-color': '#FFFFFF' } });
+    }
+    if (!map.getLayer('ip-dot-core')) {
+      map.addLayer({ id: 'ip-dot-core', type: 'circle', source: SRC, paint: { 'circle-radius': 5, 'circle-color': '#FFB300', 'circle-stroke-width': 1.5, 'circle-stroke-color': '#FFFFFF' } });
+    }
+    if (!map.getLayer('ip-label')) {
+      map.addLayer({ id: 'ip-label', type: 'symbol', source: SRC, layout: { 'text-field': ['concat', ['coalesce', ['get','city'], 'TÚ'], ' (IP)'], 'text-size': 10, 'text-font': ['JetBrains Mono Bold','Open Sans Bold'], 'text-offset': [0, 1.8], 'text-allow-overlap': true }, paint: { 'text-color': '#FFB300', 'text-halo-color': '#000', 'text-halo-width': 1.5 } });
+    }
+    // click en el punto IP → vuela suave (a demanda, no auto)
+    const onIpClick = (e: any) => {
+      if (!e.features?.length) return;
+      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 9), duration: 1800 });
+    };
+    map.on('click', 'ip-dot-core', onIpClick);
+    map.on('mouseenter', 'ip-dot-core', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'ip-dot-core', () => { map.getCanvas().style.cursor = ''; });
+    return () => {
+      map.off('click', 'ip-dot-core', onIpClick);
+    };
+  }, [mapReady, ipLocation]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !ipLocation) return;
+    const map = mapRef.current;
+    let raf = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      if (map.getLayer('ip-dot-pulse')) {
+        const t = ((now - started) % 2500) / 2500;
+        map.setPaintProperty('ip-dot-pulse', 'circle-radius', 14 + t * 26);
+        map.setPaintProperty('ip-dot-pulse', 'circle-opacity', 0.22 * (1 - t));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mapReady, ipLocation]);
 
   // ── FOLLOW MODE ──
   useEffect(() => {

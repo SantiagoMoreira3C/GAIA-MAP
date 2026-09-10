@@ -23,11 +23,12 @@ interface Props {
   playback: { inspectorId: string; index: number; playing: boolean } | null;
   setPlayback: (p: { inspectorId: string; index: number; playing: boolean } | null) => void;
   onClose?: () => void;
+  onCenterManta?: () => void;
   speed?: 1 | 2;
   setSpeed?: (s: 1 | 2) => void;
 }
 
-export default function SiapPanel({ inspectors, selectedId, onSelect, onPointClick, onPlayRoute, onStop, playback, setPlayback, onClose, speed: speedProp, setSpeed: setSpeedProp }: Props) {
+export default function SiapPanel({ inspectors, selectedId, onSelect, onPointClick, onPlayRoute, onStop, playback, setPlayback, onClose, onCenterManta, speed: speedProp, setSpeed: setSpeedProp }: Props) {
   const selected = inspectors.find(i => i.id === selectedId) || inspectors[0];
   const [mode, setMode] = useState<'moto' | 'a pie'>('moto');
   const [speedLocal, setSpeedLocal] = useState<1 | 2>(1);
@@ -35,7 +36,7 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
   const setSpeed = setSpeedProp ?? setSpeedLocal;
   const timerRef = useRef<number | null>(null);
 
-  // Suave: page anima el dot entre puntos, aquí solo avanzamos el índice con duración / velocidad
+  // Avanza índice; la animación del dot/trail la hace page.tsx sin robar cámara por punto
   useEffect(() => {
     if (!playback?.playing || !selected) return;
     const base = mode === 'moto' ? 1800 : 2800;
@@ -47,11 +48,10 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
         return;
       }
       setPlayback({ inspectorId: selected.id, index: next, playing: true });
-      const pt = selected.points[next];
-      onPointClick(pt, selected);
+      // sin onPointClick para no hacer flyTo 15 en cada paso y mantener vista amplia del rango
     }, duration);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [playback, selected, mode, speed, onPointClick, setPlayback]);
+  }, [playback, selected, mode, speed, setPlayback]);
 
   if (!inspectors.length) return <div className="glass-panel p-4 text-xs text-muted">Cargando SIAP…</div>;
 
@@ -66,7 +66,8 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
           <div className="text-[12px] font-mono font-bold tracking-[0.18em] text-white">SIAP • MANTA</div>
           <div className="text-[10px] font-mono text-white/50">altura.com.ec · 3 inspectores</div>
         </div>
-        {onClose && <button onClick={onClose} className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10 text-white/50"><X className="w-4 h-4" /></button>}
+        {onCenterManta && <button onClick={onCenterManta} title="Centrar en Manta" className="px-2.5 py-1.5 rounded-md border border-[#17A7D2]/30 bg-[#17A7D2]/15 hover:bg-[#17A7D2]/25 text-[#17A7D2] text-[10px] font-mono font-bold tracking-wider flex items-center gap-1 transition-colors"><MapPinned className="w-3 h-3" /> MANTA</button>}
+        {onClose && <button onClick={onClose} title="Ocultar SIAP" className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10 text-white/50"><X className="w-4 h-4" /></button>}
       </div>
 
       {/* Inspector tabs */}
@@ -103,13 +104,12 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (playback?.playing && playback.inspectorId===selected.id) { setPlayback({ ...playback, playing: false }); return; }
                   const start = playback?.inspectorId===selected.id ? playback.index : 0;
                   setPlayback({ inspectorId: selected.id, index: start, playing: true });
                   onPlayRoute(selected, mode);
-                  const pt = selected.points[start];
-                  if (pt) onPointClick(pt, selected);
                 }}
                 className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-mono font-bold tracking-wide text-white"
                 style={{ background: selected.color, boxShadow: `0 0 16px ${selected.color}60` }}
@@ -117,7 +117,7 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
                 {playback?.playing && playback.inspectorId===selected.id ? <Pause className="w-4 h-4"/> : <Play className="w-4 h-4"/>}
                 {playback?.playing && playback.inspectorId===selected.id ? 'PAUSAR' : 'SIMULAR RECORRIDO'}
               </button>
-              <button onClick={() => { setPlayback(null); onStop(); }} className="px-3 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white text-[10px] font-mono">RESET</button>
+              <button onClick={(e) => { e.stopPropagation(); setPlayback(null); onStop(); }} className="px-3 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white text-[10px] font-mono">RESET</button>
             </div>
             {playback && playback.inspectorId===selected.id && (
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">

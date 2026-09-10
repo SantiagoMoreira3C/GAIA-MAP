@@ -69,7 +69,12 @@ export function mapRecord(rec: MiDriveRecord): CctvCamera | null {
 async function loadMichiganCameras(): Promise<CctvCamera[]> {
   const res = await stealthFetch(CAMERA_LIST, {
     signal: AbortSignal.timeout(15000),
-    headers: { Accept: 'application/json' },
+    cache: 'no-store' as any,
+    headers: {
+      Accept: 'application/json, text/plain, */*',
+      Referer: 'https://mdotjboss.state.mi.us/MiDrive/map',
+      Origin: 'https://mdotjboss.state.mi.us',
+    },
   });
   if (!res.ok) throw new Error(`MiDrive HTTP ${res.status}`);
 
