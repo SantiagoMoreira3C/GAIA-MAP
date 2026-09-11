@@ -42,6 +42,20 @@ services:
     networks:
       - default
 
+  siap-mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: siap-mediamtx
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8554:8554"   # RTSP - ingest desde Larix (admin/admin)
+      - "8888:8888"   # HLS - playback web
+      - "8889:8889"   # WebRTC WHEP (futuro baja latencia)
+      - "9997:9997"   # API control
+    restart: unless-stopped
+    networks:
+      - default
+
   osiris-intel:
     build:
       context: ./intel

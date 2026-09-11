@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { MapPinned, Play, Pause, Bike, Footprints, Camera, Video, AlertTriangle, CheckCircle2, Clock, ChevronRight, ExternalLink, X } from 'lucide-react';
+import { MapPinned, Play, Pause, Bike, Footprints, Camera, Video, AlertTriangle, CheckCircle2, Clock, ChevronRight, ExternalLink, X, Radio, Wifi, Settings2, Copy, Check, RefreshCw } from 'lucide-react';
 import type { SiapInspector, SiapPoint } from '@/lib/siap';
 import SiapMini3D from './SiapMini3D';
+import SiapLiveViewer from './SiapLiveViewer';
 
 function impactoColor(impacto: string) {
   switch (impacto) {
@@ -39,6 +40,68 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
   const setSpeed = setSpeedProp ?? setSpeedLocal;
   const timerRef = useRef<number | null>(null);
 
+  // ── SIAP Live (RTSP→HLS/WebRTC) ──
+  const [liveStates, setLiveStates] = useState<Record<string, { status: 'offline'|'connecting'|'live'; proxyHlsUrl: string; hlsUrl: string; proxyWhepUrl: string; whepUrl: string; rtspUrl: string; updatedAt: string }>>({});
+  const [lanIp, setLanIp] = useState<string | null>(null);
+  const [showLiveConfig, setShowLiveConfig] = useState(false);
+  const [rtspInputs, setRtspInputs] = useState<Record<string,string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+  const [liveConnecting, setLiveConnecting] = useState<Record<string,boolean>>({});
+  const [liveRefreshing, setLiveRefreshing] = useState(false);
+
+  const fetchLive = async (check=false) => {
+    try {
+      if (check && selected) {
+        const r = await fetch(`/api/siap/live?inspector=${selected.id}&check=1`, { cache: 'no-store' });
+        if (r.ok) { const d = await r.json(); setLiveStates(s=>({ ...s, [d.inspectorId]: d })); }
+      } else {
+        const r = await fetch('/api/siap/live', { cache: 'no-store' });
+        if (r.ok) { const d = await r.json(); if (d.live) setLiveStates(d.live); if (d.lanIp) setLanIp(d.lanIp); }
+      }
+    } catch {}
+  };
+  useEffect(() => {
+    fetch('/api/network/ip').then(r=>r.json()).then(d=>{ if(d.lanIp) setLanIp(d.lanIp); }).catch(()=>{});
+    fetchLive(false);
+    const iv = setInterval(()=> fetchLive(false), 8000);
+    return () => clearInterval(iv);
+  }, []);
+  useEffect(() => { fetchLive(true); }, [selected?.id]);
+  const live = selected ? liveStates[selected.id] : null;
+  const effectiveRtsp = selected ? (rtspInputs[selected.id] || live?.rtspUrl || (lanIp ? `rtsp://${lanIp}:8554/${selected.id}` : `rtsp://192.168.40.183:8554/${selected?.id}`)) : '';
+  const hlsUrl = live?.proxyHlsUrl || null;
+  const whepUrl = live?.whepUrl || null;
+  const proxyWhepUrl = live?.proxyWhepUrl || null;
+  const liveStatus = live?.status || 'offline';
+  const handleConnect = async () => {
+    if (!selected) return;
+    setLiveConnecting(s=>({ ...s, [selected.id]: true }));
+    try {
+      await fetch('/api/siap/live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inspectorId: selected.id, rtspUrl: effectiveRtsp, status: 'connecting' }) });
+      await fetchLive(true);
+      setTimeout(()=> fetchLive(true), 2000);
+    } finally { setLiveConnecting(s=>({ ...s, [selected.id]: false })); }
+  };
+  const handleCopy = async (txt: string, key: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(txt);
+      } else throw new Error('no clipboard');
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {}
+    }
+    setCopied(key); setTimeout(()=>setCopied(null), 1500);
+  };
+
   // Avanza índice; la animación del dot/trail la hace page.tsx sin robar cámara por punto
   useEffect(() => {
     if (!playback?.playing || !selected) return;
@@ -73,19 +136,24 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
         {onClose && <button onClick={onClose} title="Ocultar SIAP" className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/10 text-white/50"><X className="w-4 h-4" /></button>}
       </div>
 
-      {/* Inspector tabs */}
+      {/* Inspector tabs + live dot */}
       <div className="flex gap-1.5 px-3 py-2 bg-black/20 border-b border-white/[0.04]">
-        {inspectors.map(ins => (
+        {inspectors.map(ins => {
+          const ls = liveStates[ins.id]?.status;
+          return (
           <button
             key={ins.id}
             onClick={() => onSelect(ins.id)}
-            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg border transition-all ${selected?.id === ins.id ? 'bg-white/[0.08] border-white/20' : 'border-transparent hover:bg-white/[0.04]'}`}
+            className={`relative flex-1 flex flex-col items-center gap-1 py-2 rounded-lg border transition-all ${selected?.id === ins.id ? 'bg-white/[0.08] border-white/20' : 'border-transparent hover:bg-white/[0.04]'}`}
           >
+            {ls==='live' && <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_#10b981]" title="EN VIVO" />}
+            {ls==='connecting' && <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Conectando" />}
             <span className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: ins.color, boxShadow: selected?.id===ins.id ? `0 0 10px ${ins.color}60` : 'none' }}>{ins.avatar}</span>
             <span className="text-[10px] font-mono font-bold tracking-wide text-white/90">{ins.name.split(' ')[0]}</span>
             <span className="text-[9px] font-mono text-white/40 flex items-center gap-1">{ins.vehicle==='moto'?<Bike className="w-3 h-3"/>:<Footprints className="w-3 h-3"/>}{ins.vehicle}</span>
+            {ls && <span className={`text-[8px] font-mono font-bold tracking-widest px-1.5 py-0.5 rounded ${ls==='live'?'bg-emerald-500/20 text-emerald-400':ls==='connecting'?'bg-amber-500/20 text-amber-400':'bg-white/5 text-white/30'}`}>{ls==='live'?'● LIVE':ls==='connecting'?'◐ ESPERA':'○ OFF'}</span>}
           </button>
-        ))}
+        )})}
       </div>
 
       {selected && (
@@ -136,6 +204,36 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
                 <div className="h-full transition-all duration-500" style={{ width: `${((playback.index+1)/selected.points.length)*100}%`, background: selected.color }} />
               </div>
             )}
+            {/* ── LIVE RTSP → HLS ── */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <button onClick={()=> setShowLiveConfig(v=>!v)} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-mono font-bold border transition-colors ${showLiveConfig?'bg-[#17A7D2]/20 border-[#17A7D2]/40 text-white':'border-white/10 text-white/60 hover:text-white'}`}>
+                  <Settings2 className="w-3 h-3"/> {showLiveConfig ? 'OCULTAR CONFIG' : 'CONFIGURAR LIVE'}
+                  <span className={`ml-1 px-1.5 py-0.5 rounded text-[8px] ${liveStatus==='live'?'bg-emerald-500 text-white':liveStatus==='connecting'?'bg-amber-500 text-black':'bg-white/10 text-white/40'}`}>{liveStatus.toUpperCase()}</span>
+                </button>
+                <button onClick={async ()=>{ setLiveRefreshing(true); try{ await fetchLive(true);} finally{ setTimeout(()=>setLiveRefreshing(false), 800); } }} title="Verificar señal" disabled={liveRefreshing} className="px-2.5 py-1.5 rounded-md border border-white/10 hover:bg-white/10 text-white/60 disabled:opacity-50"><RefreshCw className={`w-3 h-3 ${liveRefreshing ? 'animate-spin' : ''}`}/></button>
+              </div>
+              {showLiveConfig && (
+                <div className="rounded-lg border border-white/[0.06] bg-black/30 p-2.5 space-y-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/50"><Wifi className="w-3 h-3 text-[#17A7D2]"/> {lanIp ? `Servidor: ${lanIp}` : 'Detectando IP…'} <span className="ml-auto text-[9px] text-white/20">puerto 8554</span></div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-mono tracking-widest text-white/40">URL RTSP PARA LARIX (copia y pega en el teléfono)</label>
+                    <div className="flex gap-1.5">
+                      <input value={effectiveRtsp} onChange={e=> setRtspInputs(s=>({ ...s, [selected.id]: e.target.value }))} className="flex-1 px-2.5 py-1.5 rounded-md bg-black/50 border border-white/10 text-[11px] font-mono text-[#17A7D2] placeholder:text-white/20 focus:outline-none focus:border-[#17A7D2]/40" placeholder="rtsp://192.168.50.127:8554/SIAP-01" />
+                      <button onClick={()=> handleCopy(effectiveRtsp, 'rtsp')} className="px-2.5 py-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/70"><Copy className="w-3.5 h-3.5"/>{copied==='rtsp' && <Check className="w-3 h-3 text-emerald-400 ml-1"/>}</button>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={handleConnect} disabled={!!liveConnecting[selected.id]} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-mono font-bold tracking-widest text-white disabled:opacity-50" style={{ background: selected.color }}>
+                        <Radio className="w-3 h-3"/> {liveConnecting[selected.id] ? 'CONECTANDO…' : liveStatus==='live' ? 'RE-CONECTAR' : 'HABILITAR CÁMARA'}
+                      </button>
+                      <button onClick={()=> handleCopy(hlsUrl || '', 'hls')} title="Copiar HLS" className="px-2.5 py-1.5 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 text-white/50 text-[10px] font-mono"><Copy className="w-3 h-3"/></button>
+                    </div>
+                    <p className="text-[9px] font-mono text-white/25 leading-snug">En Larix: crea nueva conexión → URL = la de arriba → Start. Luego dale a HABILITAR CÁMARA aquí y click en el preview.</p>
+                  </div>
+                </div>
+              )}
+              <SiapLiveViewer inspectorId={selected.id} inspectorName={selected.name} color={selected.color} hlsUrl={hlsUrl} whepUrl={whepUrl} proxyWhepUrl={proxyWhepUrl} rtspUrl={effectiveRtsp} status={liveStatus as any} onRetry={()=> fetchLive(true)} />
+            </div>
             {/* Mini 3D inclinado tiempo real — debajo del simulacro, con dot/trail smooth si existe */}
             <SiapMini3D
               inspector={selected}

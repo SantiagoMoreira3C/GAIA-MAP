@@ -1,0 +1,51 @@
+# OSIRIS SIAP - MediaMTX config
+# Agrega usuario admin/admin para Larix, manteniendo acceso anónimo para HLS/lectura
+
+logLevel: info
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof
+  - user: admin
+    pass: admin
+    ips: []
+    permissions:
+      - action: publish
+        path:
+      - action: read
+        path:
+      - action: playback
+        path:
+      - action: api
+        path:
+
+# HLS fluido — segmentos/partes estables evitan tirones por bitrate variable del móvil
+hlsVariant: lowLatency
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentCount: 7
+# Permitir CORS HLS para navegador
+hlsAllowOrigins: ["*"]
+webrtcAllowOrigins: ["*"]
+apiAllowOrigins: ["*"]
+
+# Paths abiertos
+paths:
+  all_others:
+

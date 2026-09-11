@@ -18,6 +18,15 @@ export interface SiapPoint {
   thumb: string;
 }
 
+export type SiapLiveStatus = 'offline' | 'connecting' | 'live';
+export interface SiapLiveState {
+  status: SiapLiveStatus;
+  rtspUrl: string;
+  hlsUrl: string;
+  proxyHlsUrl: string;
+  updatedAt: string;
+  lastSeen?: string;
+}
 export interface SiapInspector {
   id: string;
   name: string;
@@ -27,6 +36,7 @@ export interface SiapInspector {
   vehicle: 'moto' | 'a pie';
   route: { type: 'LineString'; coordinates: [number, number][] };
   points: SiapPoint[];
+  live?: SiapLiveState;
 }
 
 export interface SiapData {
