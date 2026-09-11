@@ -73,7 +73,7 @@ const UptimeClock = () => {
     }, 1000);
     return () => clearInterval(iv);
   }, []);
-  return <span suppressHydrationWarning className="hidden lg:inline">UPTIME: <span className="text-[var(--gold-primary)]">{uptime}</span></span>;
+  return <span suppressHydrationWarning className="hidden lg:inline">UPTIME: <span className="text-[#17A7D2]">{uptime}</span></span>;
 };
 
 const ZuluClock = () => {
@@ -122,14 +122,14 @@ function ViewSegment({ active, onClick, title, icon: Icon, label, layoutId }: {
       aria-label={title}
       aria-pressed={active}
       className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono font-medium tracking-[0.18em] transition-colors duration-200 ${
-        active ? 'text-[var(--gold-light)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+        active ? 'text-[#17A7D2]' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
       }`}
     >
       {active && (
         <motion.span
           layoutId={layoutId}
           transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-          className="absolute inset-0 rounded-md border border-[var(--border-active)] bg-[var(--gold-primary)]/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_14px_var(--gold-glow)]"
+          className="absolute inset-0 rounded-md border border-[#17A7D2]/30 bg-[#17A7D2]/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_14px_rgba(23,167,210,0.35)]"
         />
       )}
       <Icon className="w-3.5 h-3.5 relative z-10" />
@@ -186,6 +186,7 @@ export default function Dashboard() {
     }) | null
   >(null);
   const [liveLocation, setLiveLocation] = useState<LiveLocation | null>(null);
+  const locatingRef = useRef(false);
   const [followUser, setFollowUser] = useState(false);
   const [navSession, setNavSession] = useState<
     { route: RouteResult; label: string; key: number } | null
@@ -265,7 +266,7 @@ export default function Dashboard() {
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number; bounds?: { west: number; south: number; east: number; north: number } } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|'remote'|null>(null);
-  const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('globe');
+  const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('mercator');
   const [terrainFocus, setTerrainFocus] = useState(0);
   const [terrainStatus, setTerrainStatus] = useState<TerrainStatus>('idle');
   const [terrainRetry, setTerrainRetry] = useState(0);
@@ -553,21 +554,14 @@ export default function Dashboard() {
   const handleSiapRoutePlay = useCallback((ins: SiapInspector, mode: 'moto'|'a pie') => {
     const coords = ins.route.coordinates as [number, number][];
     if (coords.length < 2) return;
-    setActiveRoute({
-      geometry: { type: 'LineString', coordinates: coords },
-      from: { lng: coords[0][0], lat: coords[0][1] } as any,
-      to: { lng: coords[coords.length-1][0], lat: coords[coords.length-1][1] } as any,
-      distance: 0, duration: 0, steps: [] as any, provider: 'siap', mode
-    } as any);
-    setShowDirections(false);
-    // Vista amplia para ver todo el rango donde se mueve (no zoom 15 pegado)
-    // Calcula centro/bounds del recorrido y pide zoom ~12.5 con pitch suave
+    // No usar activeRoute (línea cyan continua Directions) para SIAP — solo flechas + dash histórico
+    setActiveRoute(null);
+    // Vista amplia para ver todo el rango donde se mueve
     const lats = coords.map(c=>c[1]), lngs = coords.map(c=>c[0]);
     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
     const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
     const centerLat = (minLat + maxLat) / 2;
     const centerLng = (minLng + maxLng) / 2;
-    // margen amplio: la animación dot se verá siempre dentro del viewport
     setFlyToLocation({ lat: centerLat, lng: centerLng, zoom: 12.3, ts: Date.now() });
     const first = ins.points[0];
     if (first) {
@@ -576,6 +570,54 @@ export default function Dashboard() {
       setSiapTrail({ type: 'LineString', coordinates: [[first.lng, first.lat]], color: ins.color });
     }
   }, [bearing]);
+  const handleLocateMe = useCallback(() => {
+    if (locatingRef.current) return;
+    if (liveLocation) {
+      setLiveLocation(null);
+      setFollowUser(false);
+      (document.activeElement as HTMLElement | null)?.blur();
+      return;
+    }
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      console.warn('[GAIA] Geolocation no disponible');
+      return;
+    }
+    const isSecure = typeof window !== 'undefined' ? window.isSecureContext : true;
+    // Sin respaldo falso: si no hay GPS real, salir limpio (quitar punto) y avisar
+    const handleNoGps = () => {
+      setLiveLocation(null);
+      setFollowUser(false);
+      console.warn('[GAIA] Ubicarme: GPS no disponible en origen inseguro. Abre https:// o http://localhost para ubicación real.');
+      setTimeout(() => (document.activeElement as HTMLElement | null)?.blur(), 100);
+    };
+    if (!isSecure) {
+      handleNoGps();
+      return;
+    }
+    locatingRef.current = true;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        locatingRef.current = false;
+        const { latitude, longitude, accuracy, heading } = pos.coords;
+        setLiveLocation({ lat: latitude, lng: longitude, accuracy: accuracy ?? undefined, heading: heading ?? null });
+        setFlyToLocation({ lat: latitude, lng: longitude, zoom: 15, ts: Date.now() });
+        setTimeout(() => (document.activeElement as HTMLElement | null)?.blur(), 100);
+      },
+      (err) => {
+        locatingRef.current = false;
+        const msg = err.message || '';
+        if (msg.includes('Only secure origins are allowed') || msg.includes('Secure origins')) {
+          handleNoGps();
+        } else {
+          console.warn('[GAIA] Ubicarme falló:', msg);
+          setLiveLocation(null);
+          setTimeout(() => (document.activeElement as HTMLElement | null)?.blur(), 100);
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, [liveLocation]);
+
   // Entity click handler (hoisted from JSX to comply with Rules of Hooks - Fixes #113)
   const handleEntityClick = useCallback((entity: any) => {
     if (entity?.type === 'siap') {
@@ -1086,7 +1128,7 @@ export default function Dashboard() {
           >
             {/* ── Scanline CRT overlay ── */}
             <div className="absolute inset-0 pointer-events-none z-[1]" style={{
-              backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(212,175,55,0.015) 2px, rgba(212,175,55,0.015) 4px)',
+              backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(23,167,210,0.015) 2px, rgba(23,167,210,0.015) 4px)',
               animation: 'splashScanDrift 8s linear infinite',
             }} />
 
@@ -1095,7 +1137,7 @@ export default function Dashboard() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.6 }}
               transition={{ delay: 0.8, duration: 0.5 }}
-              className="absolute top-6 left-6 z-[2] font-mono text-[11px] tracking-[0.3em] text-[var(--gold-primary)]"
+              className="absolute top-6 left-6 z-[2] font-mono text-[11px] tracking-[0.3em] text-[#17A7D2]"
             >
               GAIA · altura.com.ec
             </motion.div>
@@ -1110,10 +1152,10 @@ export default function Dashboard() {
                 animate={{ opacity: 1, scale: 1, rotate: 360 }}
                 transition={{ opacity: { duration: 0.6 }, scale: { duration: 0.8, ease: 'easeOut' }, rotate: { duration: 20, repeat: Infinity, ease: 'linear' } }}
                 className="absolute inset-0 rounded-full"
-                style={{ border: '1px solid rgba(212,175,55,0.2)' }}
+                style={{ border: '1px solid rgba(23,167,210,0.2)' }}
               >
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full" style={{ background: 'var(--gold-primary)', boxShadow: '0 0 12px var(--gold-primary), 0 0 24px rgba(212,175,55,0.3)' }} />
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-1 h-1 rounded-full" style={{ background: 'rgba(212,175,55,0.5)', boxShadow: '0 0 6px rgba(212,175,55,0.3)' }} />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full" style={{ background: '#17A7D2', boxShadow: '0 0 12px #17A7D2, 0 0 24px rgba(23,167,210,0.3)' }} />
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-1 h-1 rounded-full" style={{ background: 'rgba(23,167,210,0.5)', boxShadow: '0 0 6px rgba(23,167,210,0.3)' }} />
               </motion.div>
 
               {/* Middle ring — faster counter-clockwise */}
@@ -1134,9 +1176,9 @@ export default function Dashboard() {
                 animate={{ opacity: 1, scale: 1, rotate: 360 }}
                 transition={{ opacity: { duration: 0.6, delay: 0.3 }, scale: { duration: 0.8, delay: 0.3, ease: 'easeOut' }, rotate: { duration: 7, repeat: Infinity, ease: 'linear' } }}
                 className="absolute rounded-full"
-                style={{ inset: '40px', border: '1px solid rgba(212,175,55,0.25)' }}
+                style={{ inset: '40px', border: '1px solid rgba(23,167,210,0.25)' }}
               >
-                <div className="absolute top-0 left-1/4 -translate-y-1/2 w-1.5 h-1.5 rounded-full" style={{ background: 'var(--gold-primary)', boxShadow: '0 0 8px var(--gold-primary)' }} />
+                <div className="absolute top-0 left-1/4 -translate-y-1/2 w-1.5 h-1.5 rounded-full" style={{ background: '#17A7D2', boxShadow: '0 0 8px #17A7D2' }} />
               </motion.div>
 
               {/* Core circle + crosshair */}
@@ -1145,17 +1187,17 @@ export default function Dashboard() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.4, duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
                 className="relative w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ border: '2px solid var(--gold-primary)', boxShadow: '0 0 20px rgba(212,175,55,0.15), inset 0 0 20px rgba(212,175,55,0.05)' }}
+                style={{ border: '2px solid #17A7D2', boxShadow: '0 0 20px rgba(23,167,210,0.15), inset 0 0 20px rgba(23,167,210,0.05)' }}
               >
                 <motion.div
                   animate={{ opacity: [0.3, 0.8, 0.3] }}
                   transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
                   className="w-5 h-5 rounded-full"
-                  style={{ background: 'radial-gradient(circle, rgba(212,175,55,0.4) 0%, rgba(212,175,55,0.05) 70%)' }}
+                  style={{ background: 'radial-gradient(circle, rgba(23,167,210,0.4) 0%, rgba(23,167,210,0.05) 70%)' }}
                 />
                 {/* Crosshair lines */}
-                <div className="absolute w-[1px] h-full" style={{ background: 'linear-gradient(to bottom, transparent, rgba(212,175,55,0.3), transparent)' }} />
-                <div className="absolute w-full h-[1px]" style={{ background: 'linear-gradient(to right, transparent, rgba(212,175,55,0.3), transparent)' }} />
+                <div className="absolute w-[1px] h-full" style={{ background: 'linear-gradient(to bottom, transparent, rgba(23,167,210,0.3), transparent)' }} />
+                <div className="absolute w-full h-[1px]" style={{ background: 'linear-gradient(to right, transparent, rgba(23,167,210,0.3), transparent)' }} />
               </motion.div>
 
               {/* Faint pulsing radar sweep */}
@@ -1164,7 +1206,7 @@ export default function Dashboard() {
                 animate={{ opacity: [0, 0.15, 0], rotate: [0, 360] }}
                 transition={{ opacity: { duration: 3, repeat: Infinity }, rotate: { duration: 3, repeat: Infinity, ease: 'linear' }, delay: 0.6 }}
                 className="absolute inset-[10px] rounded-full"
-                style={{ background: 'conic-gradient(from 0deg, transparent 0deg, rgba(212,175,55,0.15) 40deg, transparent 80deg)' }}
+                style={{ background: 'conic-gradient(from 0deg, transparent 0deg, rgba(23,167,210,0.15) 40deg, transparent 80deg)' }}
               />
             </div>
 
@@ -1177,7 +1219,7 @@ export default function Dashboard() {
                   animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                   transition={{ delay: 0.5 + i * 0.08, duration: 0.5, ease: 'easeOut' }}
                   className="text-4xl md:text-5xl font-bold tracking-[0.5em] font-mono"
-                  style={{ color: 'var(--text-heading)', textShadow: '0 0 30px rgba(212,175,55,0.2)' }}
+                  style={{ color: '#17A7D2', textShadow: '0 0 30px rgba(23,167,210,0.35)' }}
                 >
                   {letter}
                 </motion.span>
@@ -1192,7 +1234,7 @@ export default function Dashboard() {
                 transition={{ delay: 1.2, duration: 0.8, ease: 'easeInOut' }}
                 className="overflow-hidden whitespace-nowrap"
               >
-                <p className="text-[11px] md:text-[10px] font-mono tracking-[0.5em] text-[var(--gold-primary)]" style={{ opacity: 0.8 }}>
+                <p className="text-[11px] md:text-[10px] font-mono tracking-[0.5em] text-[#17A7D2]" style={{ opacity: 0.8 }}>
                   SISTEMA DE INSPECCION TERRITORIAL SIAP
                 </p>
               </motion.div>
@@ -1201,13 +1243,13 @@ export default function Dashboard() {
             {/* ── Multi-stage progress bar ── */}
             <div className="w-64 md:w-80 z-[2]">
               {/* Thin progress track */}
-              <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: 'rgba(212,175,55,0.1)' }}>
+              <div className="relative w-full h-[2px] rounded-full overflow-hidden" style={{ background: 'rgba(23,167,210,0.1)' }}>
                 <motion.div
                   initial={{ width: '0%' }}
                   animate={{ width: ['0%', '25%', '50%', '78%', '100%'] }}
                   transition={{ duration: 2.2, delay: 0.5, times: [0, 0.25, 0.5, 0.75, 1], ease: 'easeInOut' }}
                   className="absolute inset-y-0 left-0 rounded-full"
-                  style={{ background: 'linear-gradient(90deg, var(--gold-primary), var(--cyan-primary), var(--gold-primary))', boxShadow: '0 0 12px rgba(212,175,55,0.4)' }}
+                  style={{ background: 'linear-gradient(90deg, #17A7D2, var(--cyan-primary), #17A7D2)', boxShadow: '0 0 12px rgba(23,167,210,0.4)' }}
                 />
               </div>
 
@@ -1236,7 +1278,7 @@ export default function Dashboard() {
             {/* ── Decorative grid lines ── */}
             <div className="absolute inset-0 pointer-events-none z-[0]" style={{ opacity: 0.03 }}>
               <div className="absolute inset-0" style={{
-                backgroundImage: 'linear-gradient(rgba(212,175,55,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.5) 1px, transparent 1px)',
+                backgroundImage: 'linear-gradient(rgba(23,167,210,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(23,167,210,0.5) 1px, transparent 1px)',
                 backgroundSize: '60px 60px',
               }} />
             </div>
@@ -1254,7 +1296,7 @@ export default function Dashboard() {
                 animate={{ opacity: 0.3 }}
                 transition={{ delay: 0.8 + i * 0.1, duration: 0.5 }}
                 className="absolute w-8 h-8 z-[2]"
-                style={{ top: pos.t, bottom: pos.b, left: pos.l, right: pos.r, borderWidth: pos.bw, borderStyle: 'solid', borderColor: 'var(--gold-primary)' }}
+                style={{ top: pos.t, bottom: pos.b, left: pos.l, right: pos.r, borderWidth: pos.bw, borderStyle: 'solid', borderColor: '#17A7D2' }}
               />
             ))}
 
@@ -1274,6 +1316,7 @@ export default function Dashboard() {
           siapFilter={siapSelected}
           siapPlayback={siapPlaybackDot}
           siapTrail={siapTrail}
+          siapIsPlaying={siapPlayback?.playing ?? false}
           key={`${osirisTheme}-${mapRetry}`}
           onRetryMap={() => setMapRetry(retry => retry + 1)}
           data={data} 
@@ -1401,13 +1444,18 @@ export default function Dashboard() {
         className="absolute bottom-[75px] md:bottom-[100px] z-[200] flex flex-col gap-1.5 pointer-events-none"
         style={{ left: isMobile ? '12px' : '120px' }}
       >
-        {/* Unified Control Strip */}
-        <div className="flex items-center gap-[3px] p-[3px] pointer-events-auto rounded-xl border border-[var(--border-primary)] bg-[var(--bg-panel)] backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.55)]">
-          <ViewSegment layoutId="view-projection" active={mapProjection === 'globe'} onClick={() => setMapProjection('globe')} title="3D Globe" icon={Globe} label="3D" />
-          <ViewSegment layoutId="view-projection" active={mapProjection === 'mercator'} onClick={selectFlatMap} title="2D Map" icon={MapPinned} label="2D" />
-          <div className="w-px h-5 mx-1 bg-[var(--border-secondary)]" />
-          <ViewSegment layoutId="view-style" active={mapStyle === 'dark'} onClick={() => setMapStyle('dark')} title="Night Mode" icon={Moon} label="MAP" />
-          <ViewSegment layoutId="view-style" active={mapStyle === 'satellite'} onClick={() => setMapStyle('satellite')} title="Satellite View" icon={Satellite} label="SAT" />
+        {/* Unified Control Strip — ahora en azul SIAP + botón Ubicarme */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-[3px] p-[3px] pointer-events-auto rounded-xl border border-[var(--border-primary)] bg-[var(--bg-panel)] backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.55)]">
+            <ViewSegment layoutId="view-projection" active={mapProjection === 'globe'} onClick={() => setMapProjection('globe')} title="3D Globe" icon={Globe} label="3D" />
+            <ViewSegment layoutId="view-projection" active={mapProjection === 'mercator'} onClick={selectFlatMap} title="2D Map" icon={MapPinned} label="2D" />
+            <div className="w-px h-5 mx-1 bg-[var(--border-secondary)]" />
+            <ViewSegment layoutId="view-style" active={mapStyle === 'dark'} onClick={() => setMapStyle('dark')} title="Night Mode" icon={Moon} label="MAP" />
+            <ViewSegment layoutId="view-style" active={mapStyle === 'satellite'} onClick={() => setMapStyle('satellite')} title="Satellite View" icon={Satellite} label="SAT" />
+          </div>
+          {false && <button onClick={handleLocateMe} title={liveLocation ? 'Quitar mi ubicación — desactiva punto azul' : 'Ubicarme donde estoy (GPS)'} aria-pressed={!!liveLocation} className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl border backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.35)] text-[10px] font-mono font-bold tracking-[0.15em] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#17A7D2]/40 ${liveLocation ? 'border-[#17A7D2]/40 bg-[#17A7D2]/20 text-[#17A7D2]' : 'border-white/10 bg-black/20 text-white/60 hover:bg-white/10 hover:text-white'}`}>
+            <Crosshair className={`w-3.5 h-3.5 ${liveLocation ? 'text-[#17A7D2]' : ''}`} /> {liveLocation ? 'UBICADO ✓' : 'UBICARME'}
+          </button>}
         </div>
 
 
@@ -1461,9 +1509,9 @@ export default function Dashboard() {
         
         <TokenPanel />
 
-        <a href='https://ko-fi.com/M8D41ZYW4Z' target='_blank' rel='noopener noreferrer' className="pointer-events-auto glass-panel px-3 py-1.5 flex items-center gap-1.5 text-[9px] font-mono tracking-widest hover:opacity-80 transition-opacity border-[var(--gold-primary)]/40 bg-[var(--gold-primary)]/10 ml-3 shadow-[0_0_10px_rgba(255,215,0,0.1)]">
-          <div className="w-1.5 h-1.5 rounded-full bg-[var(--gold-primary)] animate-osiris-pulse" />
-          <span className="text-[var(--gold-primary)] font-bold">SUPPORT</span>
+        <a href='https://ko-fi.com/M8D41ZYW4Z' target='_blank' rel='noopener noreferrer' className="pointer-events-auto glass-panel px-3 py-1.5 flex items-center gap-1.5 text-[9px] font-mono tracking-widest hover:opacity-80 transition-opacity border-[#17A7D2]/40 bg-[#17A7D2]/10 ml-3 shadow-[0_0_10px_rgba(255,215,0,0.1)]">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#17A7D2] animate-osiris-pulse" />
+          <span className="text-[#17A7D2] font-bold">SUPPORT</span>
         </a>
       </motion.div>
 
@@ -1473,9 +1521,9 @@ export default function Dashboard() {
       {isMobile && !showDirections && !navSession && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.5 }} className="absolute top-3 right-3 z-[200] pointer-events-auto flex items-center gap-2">
           <TokenPanel />
-          <a href='https://ko-fi.com/M8D41ZYW4Z' target='_blank' rel='noopener noreferrer' className="glass-panel px-2 py-1 flex items-center gap-1.5 text-[9px] font-mono tracking-widest hover:opacity-80 transition-opacity border-[var(--gold-primary)]/40 bg-[var(--gold-primary)]/10">
-            <div className="w-1 h-1 rounded-full bg-[var(--gold-primary)] animate-osiris-pulse" />
-            <span className="text-[var(--gold-primary)] font-bold">SUPPORT</span>
+          <a href='https://ko-fi.com/M8D41ZYW4Z' target='_blank' rel='noopener noreferrer' className="glass-panel px-2 py-1 flex items-center gap-1.5 text-[9px] font-mono tracking-widest hover:opacity-80 transition-opacity border-[#17A7D2]/40 bg-[#17A7D2]/10">
+            <div className="w-1 h-1 rounded-full bg-[#17A7D2] animate-osiris-pulse" />
+            <span className="text-[#17A7D2] font-bold">SUPPORT</span>
           </a>
         </motion.div>
       )}
@@ -1498,6 +1546,8 @@ export default function Dashboard() {
             setSpeed={setSiapSpeed}
             onClose={() => setShowSiap(false)}
             onCenterManta={() => setFlyToLocation({ lat: -0.963, lng: -80.712, zoom: 13, ts: Date.now() })}
+            liveDot={siapPlaybackDot}
+            liveTrail={siapTrail}
           />
         </div>
       )}
@@ -1569,12 +1619,12 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); setShowSpaceCam(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Markets — crypto prices, space weather, global indices" aria-label="Markets" aria-expanded={showMarkets}>
-            <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); setShowSpaceCam(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showMarkets ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title="Markets — crypto prices, space weather, global indices" aria-label="Markets" aria-expanded={showMarkets}>
+            <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[#17A7D2]' : 'text-white/60'}`} />
             {showMarkets && (
               <span
                 aria-hidden="true"
-                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[var(--gold-primary)]"
+                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[#17A7D2]"
               />
             )}
           </button>
@@ -1622,12 +1672,12 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDirections(!showDirections); if (showDirections) { setActiveRoute(null); } setShowDesktopSearch(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDirections ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Directions — turn-by-turn routing" aria-label="Directions" aria-expanded={showDirections}>
-            <Route className={`w-4 h-4 ${showDirections ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowDirections(!showDirections); if (showDirections) { setActiveRoute(null); } setShowDesktopSearch(false); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDirections ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title="Directions — turn-by-turn routing" aria-label="Directions" aria-expanded={showDirections}>
+            <Route className={`w-4 h-4 ${showDirections ? 'text-[#17A7D2]' : 'text-white/60'}`} />
             {showDirections && (
               <span
                 aria-hidden="true"
-                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[var(--gold-primary)]"
+                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[#17A7D2]"
               />
             )}
           </button>
@@ -1635,12 +1685,12 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="Search — find locations, cities, coordinates" aria-label="Search" aria-expanded={showDesktopSearch}>
-            <Search className={`w-4 h-4 ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowSpaceCam(false); setShowDrawing(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showDesktopSearch ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title="Search — find locations, cities, coordinates" aria-label="Search" aria-expanded={showDesktopSearch}>
+            <Search className={`w-4 h-4 ${showDesktopSearch ? 'text-[#17A7D2]' : 'text-white/60'}`} />
             {showDesktopSearch && (
               <span
                 aria-hidden="true"
-                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[var(--gold-primary)]"
+                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[#17A7D2]"
               />
             )}
           </button>
@@ -1659,15 +1709,15 @@ export default function Dashboard() {
 
         {/* ── ARCGIS INTEL ── */}
         <div className="relative group">
-          <button onClick={() => { setShowArcGIS(!showArcGIS); setShowRemote(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showArcGIS ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`} title="ArcGIS — search & import geospatial intel layers" aria-label="ArcGIS" aria-expanded={showArcGIS}>
-            <Database className={`w-4 h-4 ${showArcGIS ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowArcGIS(!showArcGIS); setShowRemote(false); }} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showArcGIS ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title="ArcGIS — search & import geospatial intel layers" aria-label="ArcGIS" aria-expanded={showArcGIS}>
+            <Database className={`w-4 h-4 ${showArcGIS ? 'text-[#17A7D2]' : 'text-white/60'}`} />
             {showArcGIS && (
               <span
                 aria-hidden="true"
-                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[var(--gold-primary)]"
+                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[#17A7D2]"
               />
             )}
-            {arcgisLayers.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-[var(--gold-primary)] text-black text-[9px] font-mono font-bold leading-none px-0.5">{arcgisLayers.length}</span>}
+            {arcgisLayers.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-[#17A7D2] text-black text-[9px] font-mono font-bold leading-none px-0.5">{arcgisLayers.length}</span>}
           </button>
           <span className="absolute right-11 top-1/2 -translate-y-1/2 px-2 py-1 text-[9px] font-mono tracking-wider text-white/80 bg-black/80 backdrop-blur-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none">ARCGIS</span>
           <AnimatePresence>
@@ -1754,7 +1804,7 @@ export default function Dashboard() {
                     href={getYouTubeWatchUrl(liveFeedUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--border-primary)] hover:bg-[var(--gold-primary)] hover:text-black text-white transition-colors text-[10px] font-mono"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[var(--border-primary)] hover:bg-[#17A7D2] hover:text-black text-white transition-colors text-[10px] font-mono"
                   >
                     <span>Open in YouTube</span>
                     <ExternalLink className="w-3 h-3" />
@@ -1801,9 +1851,9 @@ export default function Dashboard() {
               {/* Footer — only show for embeddable feeds */}
               {liveFeedEmbedAllowed && (
                 <div className="bg-[#111]/90 px-4 py-2.5 border-t border-[var(--border-primary)] flex items-center gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-[var(--gold-primary)] shrink-0" />
+                  <AlertTriangle className="w-4 h-4 text-[#17A7D2] shrink-0" />
                   <span className="text-[10px] font-mono text-white/70 leading-relaxed">
-                    If you see &ldquo;Video unavailable&rdquo;, use <strong className="text-[var(--gold-primary)]">Open in YouTube</strong> above.
+                    If you see &ldquo;Video unavailable&rdquo;, use <strong className="text-[#17A7D2]">Open in YouTube</strong> above.
                   </span>
                 </div>
               )}
@@ -1937,7 +1987,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-5 text-[9px] font-mono tracking-widest text-[var(--text-muted)] opacity-60">
             <div className="flex gap-2 items-center" title="Cursor coordinates (hover over map)">
               <span>CURSOR</span>
-              <span ref={coordsDisplayRef} className="text-[var(--gold-primary)] font-bold tabular-nums">—</span>
+              <span ref={coordsDisplayRef} className="text-[#17A7D2] font-bold tabular-nums">—</span>
             </div>
             <div className="flex gap-2 items-center" title="Reverse-geocoded location name">
               <span>LOCATION</span>
@@ -1945,7 +1995,7 @@ export default function Dashboard() {
             </div>
             <div className="flex gap-2 items-center" title="Current zoom level">
               <span>ZOOM</span>
-              <span className="text-[var(--gold-primary)] font-bold tabular-nums">{mapView.zoom.toFixed(1)}</span>
+              <span className="text-[#17A7D2] font-bold tabular-nums">{mapView.zoom.toFixed(1)}</span>
             </div>
           </div>
         </motion.div>
@@ -1958,12 +2008,12 @@ export default function Dashboard() {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="absolute top-16 md:top-20 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[300] md:w-[480px] max-h-[65vh] overflow-y-auto styled-scrollbar">
           <div className="glass-panel p-5 osiris-glow">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-mono font-bold text-[var(--gold-primary)] tracking-wider">REGION DOSSIER</h2>
+              <h2 className="text-sm font-mono font-bold text-[#17A7D2] tracking-wider">REGION DOSSIER</h2>
               <button onClick={() => { setRegionDossier(null); setDossierLoading(false); }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs">✕</button>
             </div>
             {dossierLoading ? (
               <div className="text-center py-8">
-                <div className="w-5 h-5 border-2 border-[var(--gold-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <div className="w-5 h-5 border-2 border-[#17A7D2] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 <span className="text-[9px] font-mono text-[var(--text-muted)] tracking-widest">COMPILING INTEL...</span>
               </div>
             ) : regionDossier && (
@@ -1979,7 +2029,7 @@ export default function Dashboard() {
                     <div><div className="hud-label mb-0.5">AREA</div><div className="text-xs text-[var(--text-primary)]">{regionDossier.country.area?.toLocaleString()} km²</div></div>
                   </div>
                 )}
-                {regionDossier.head_of_state && (<div><div className="hud-label mb-0.5">HEAD OF STATE</div><div className="text-xs text-[var(--gold-primary)]">{regionDossier.head_of_state.name}</div><div className="text-[9px] text-[var(--text-muted)]">{regionDossier.head_of_state.position}</div></div>)}
+                {regionDossier.head_of_state && (<div><div className="hud-label mb-0.5">HEAD OF STATE</div><div className="text-xs text-[#17A7D2]">{regionDossier.head_of_state.name}</div><div className="text-[9px] text-[var(--text-muted)]">{regionDossier.head_of_state.position}</div></div>)}
                 {regionDossier.wikipedia && (<div><div className="hud-label mb-1">INTELLIGENCE BRIEF</div><div className="flex gap-3">{regionDossier.wikipedia.thumbnail && <img src={regionDossier.wikipedia.thumbnail} alt="" className="w-14 h-14 rounded object-cover flex-shrink-0" />}<p className="text-[9px] text-[var(--text-secondary)] leading-relaxed">{regionDossier.wikipedia.extract}</p></div></div>)}
               </div>
             )}
@@ -2039,20 +2089,20 @@ export default function Dashboard() {
         { pos: 'bottom-0 right-0', vAnchor: 'bottom-0', hAnchor: 'right-0', hGrad: 'bg-gradient-to-l', vGrad: 'bg-gradient-to-t' },
       ].map((c, i) => (
         <div key={i} className={`absolute ${c.pos} w-16 h-16 pointer-events-none z-[1]`}>
-          <div className={`absolute ${c.vAnchor} ${c.hAnchor} w-full h-[1px] ${c.hGrad} from-[var(--gold-primary)]/30 to-transparent`} />
-          <div className={`absolute ${c.vAnchor} ${c.hAnchor} w-[1px] h-full ${c.vGrad} from-[var(--gold-primary)]/30 to-transparent`} />
+          <div className={`absolute ${c.vAnchor} ${c.hAnchor} w-full h-[1px] ${c.hGrad} from-[#17A7D2]/30 to-transparent`} />
+          <div className={`absolute ${c.vAnchor} ${c.hAnchor} w-[1px] h-full ${c.vGrad} from-[#17A7D2]/30 to-transparent`} />
         </div>
       ))}
 
       {/* Keyboard Shortcuts Overlay */}
       <KeyboardShortcuts />
 
-      {/* ── GLOBAL STATUS TICKER (bottom) ── */}
-      <GlobalStatusBar />
+      {/* ── GLOBAL STATUS TICKER (bottom) — ahora con nombres de inspectores bajo BTC ── */}
+      <GlobalStatusBar inspectors={siapInspectors.map(s => ({ name: s.name, role: s.role, color: s.color, vehicle: s.vehicle, points: s.points.length }))} />
 
       {/* Shortcut hint — more visible */}
       <div className="desktop-only absolute bottom-[26px] right-5 z-[200] pointer-events-none text-[9px] font-mono text-[var(--text-muted)] opacity-50 tracking-widest" title="Press ? to see all keyboard shortcuts">
-        Press <span className="text-[var(--gold-primary)] opacity-80">?</span> for shortcuts · <span className="text-[var(--gold-primary)] opacity-80">F</span> fullscreen · <span className="text-[var(--gold-primary)] opacity-80">R</span> reset view
+        Press <span className="text-[#17A7D2] opacity-80">?</span> for shortcuts · <span className="text-[#17A7D2] opacity-80">F</span> fullscreen · <span className="text-[#17A7D2] opacity-80">R</span> reset view
       </div>
 
 

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPinned, Play, Pause, Bike, Footprints, Camera, Video, AlertTriangle, CheckCircle2, Clock, ChevronRight, ExternalLink, X } from 'lucide-react';
 import type { SiapInspector, SiapPoint } from '@/lib/siap';
+import SiapMini3D from './SiapMini3D';
 
 function impactoColor(impacto: string) {
   switch (impacto) {
@@ -26,9 +27,11 @@ interface Props {
   onCenterManta?: () => void;
   speed?: 1 | 2;
   setSpeed?: (s: 1 | 2) => void;
+  liveDot?: { lng: number; lat: number; inspectorId: string } | null;
+  liveTrail?: { type: 'LineString'; coordinates: [number, number][]; color?: string } | null;
 }
 
-export default function SiapPanel({ inspectors, selectedId, onSelect, onPointClick, onPlayRoute, onStop, playback, setPlayback, onClose, onCenterManta, speed: speedProp, setSpeed: setSpeedProp }: Props) {
+export default function SiapPanel({ inspectors, selectedId, onSelect, onPointClick, onPlayRoute, onStop, playback, setPlayback, onClose, onCenterManta, speed: speedProp, setSpeed: setSpeedProp, liveDot, liveTrail }: Props) {
   const selected = inspectors.find(i => i.id === selectedId) || inspectors[0];
   const [mode, setMode] = useState<'moto' | 'a pie'>('moto');
   const [speedLocal, setSpeedLocal] = useState<1 | 2>(1);
@@ -107,6 +110,8 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
                 onClick={(e) => {
                   e.stopPropagation();
                   if (playback?.playing && playback.inspectorId===selected.id) { setPlayback({ ...playback, playing: false }); return; }
+                  const isFinished = playback?.inspectorId===selected.id && !playback.playing && playback.index === selected.points.length - 1;
+                  if (isFinished) { setPlayback(null); onStop(); return; }
                   const start = playback?.inspectorId===selected.id ? playback.index : 0;
                   setPlayback({ inspectorId: selected.id, index: start, playing: true });
                   onPlayRoute(selected, mode);
@@ -114,16 +119,29 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
                 className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-mono font-bold tracking-wide text-white"
                 style={{ background: selected.color, boxShadow: `0 0 16px ${selected.color}60` }}
               >
-                {playback?.playing && playback.inspectorId===selected.id ? <Pause className="w-4 h-4"/> : <Play className="w-4 h-4"/>}
-                {playback?.playing && playback.inspectorId===selected.id ? 'PAUSAR' : 'SIMULAR RECORRIDO'}
+                {playback?.playing && playback.inspectorId===selected.id ? <Pause className="w-4 h-4"/> : playback?.inspectorId===selected.id && !playback.playing && playback.index === selected.points.length - 1 ? <CheckCircle2 className="w-4 h-4"/> : <Play className="w-4 h-4"/>}
+                {playback?.playing && playback.inspectorId===selected.id ? 'PAUSAR' : playback?.inspectorId===selected.id && !playback.playing && playback.index === selected.points.length - 1 ? 'REINICIAR' : 'SIMULAR RECORRIDO'}
               </button>
-              <button onClick={(e) => { e.stopPropagation(); setPlayback(null); onStop(); }} className="px-3 py-2 rounded-lg border border-white/10 text-white/60 hover:text-white text-[10px] font-mono">RESET</button>
+              {(() => {
+                const isFinished = playback?.inspectorId===selected.id && !playback.playing && playback.index === selected.points.length - 1;
+                return (
+                  <button onClick={(e) => { e.stopPropagation(); setPlayback(null); onStop(); }} className={`px-3 py-2 rounded-lg border text-[10px] font-mono transition-all ${isFinished ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300 animate-pulse' : 'border-white/10 text-white/60 hover:text-white'}`} title={isFinished ? 'Recorrido completado — limpiar mapa' : 'Limpiar simulación'}>
+                    {isFinished ? 'LIMPIAR ✓' : 'RESET'}
+                  </button>
+                );
+              })()}
             </div>
             {playback && playback.inspectorId===selected.id && (
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                 <div className="h-full transition-all duration-500" style={{ width: `${((playback.index+1)/selected.points.length)*100}%`, background: selected.color }} />
               </div>
             )}
+            {/* Mini 3D inclinado tiempo real — debajo del simulacro, con dot/trail smooth si existe */}
+            <SiapMini3D
+              inspector={selected}
+              playback={liveDot && liveDot.inspectorId===selected.id ? liveDot : (playback && playback.inspectorId===selected.id && selected.points[playback.index] ? { lng: selected.points[playback.index].lng, lat: selected.points[playback.index].lat, inspectorId: selected.id } : null)}
+              trail={liveTrail && (liveTrail as any).coordinates?.length ? liveTrail as any : (playback && playback.inspectorId===selected.id ? { type: 'LineString', coordinates: selected.points.slice(0, playback.index + 1).map(p => [p.lng, p.lat] as [number, number]), color: selected.color } : null)}
+            />
           </div>
 
           {/* Points list */}

@@ -85,11 +85,35 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* fall through */ }
 
-    return NextResponse.json({ error: 'All geolocation providers failed' }, { status: 502 });
+    // Fallback graceful: en lugar de 502 que dispara reintentos en el cliente, devolver Manta como aproximación
+    return NextResponse.json({
+      status: 'success',
+      query: ip || 'fallback',
+      lat: -0.963,
+      lon: -80.712,
+      city: 'Manta',
+      regionName: 'Manabí',
+      country: 'Ecuador',
+      isp: 'Fallback',
+      org: 'Fallback',
+      as: 'Fallback',
+      fallback: true,
+    });
   } catch (e) {
     return NextResponse.json(
-      { error: 'Failed to reach geolocation service', detail: e instanceof Error ? e.message : String(e) },
-      { status: 503 }
+      {
+        status: 'success',
+        query: 'fallback',
+        lat: -0.963,
+        lon: -80.712,
+        city: 'Manta',
+        regionName: 'Manabí',
+        country: 'Ecuador',
+        isp: 'Fallback',
+        org: 'Fallback',
+        as: 'Fallback',
+        fallback: true,
+      }
     );
   }
 }

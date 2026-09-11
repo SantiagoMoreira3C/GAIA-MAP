@@ -71,7 +71,8 @@ const formatChange = (change: number | undefined) => {
   );
 };
 
-export default function GlobalStatusBar() {
+interface SiapInspectorLite { name: string; role: string; color: string; vehicle: string; points: number; }
+export default function GlobalStatusBar({ inspectors }: { inspectors?: SiapInspectorLite[] }) {
   const [crypto, setCrypto] = useState<CryptoPrice[]>([]);
   const [quakes, setQuakes] = useState<Earthquake[]>([]);
   const [hoveredQuake, setHoveredQuake] = useState<Earthquake | null>(null);
@@ -130,9 +131,9 @@ export default function GlobalStatusBar() {
     return () => clearInterval(iv);
   }, []);
 
-  // Keep the bar mounted even with no feed data — the left-hand community and
-  // docs links must stay reachable when CoinGecko/USGS are rate-limited or down.
-  const hasTicker = crypto.length > 0 || quakes.length > 0;
+  // Si hay inspectores SIAP, priorizarlos sobre BTC en el ticker
+  const hasSiap = !!inspectors && inspectors.length > 0;
+  const hasTicker = hasSiap || crypto.length > 0 || quakes.length > 0;
 
   const solPrice = crypto.find(c => c.symbol === 'SOL');
 
@@ -175,8 +176,16 @@ export default function GlobalStatusBar() {
           <div className={`flex items-center animate-ticker whitespace-nowrap ${hasTicker ? '' : 'hidden'}`}>
             {[...Array(4)].map((_, repeatIdx) => (
               <span key={repeatIdx} className="inline-flex items-center">
-                {/* Crypto prices */}
-                {crypto.map(c => (
+                {/* SIAP Inspectores — reemplaza BTC cuando hay datos */}
+                {hasSiap ? inspectors!.map(ins => (
+                  <span key={`${ins.name}-${repeatIdx}`} className="inline-flex items-center gap-1.5 mx-3">
+                    <span className="w-2 h-2 rounded-full" style={{ background: ins.color, boxShadow: `0 0 6px ${ins.color}80` }} />
+                    <span className="text-white/90 font-bold tracking-wide">{ins.name}</span>
+                    <span className="text-white/40 text-[9px]">{ins.role.replace('Inspectora','Insp.').replace('Inspector','Insp.')}</span>
+                    <span className="text-[#17A7D2] text-[9px]">{ins.points} pts</span>
+                    <span className="text-white/30 text-[9px]">{ins.vehicle}</span>
+                  </span>
+                )) : crypto.map(c => (
                   <span key={`${c.symbol}-${repeatIdx}`} className="inline-flex items-center gap-1 mx-3">
                     {c.symbol === 'BTC' && <BtcIcon />}
                     {c.symbol === 'ETH' && <EthIcon />}

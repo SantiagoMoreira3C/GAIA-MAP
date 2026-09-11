@@ -88,6 +88,8 @@ interface OsirisMapProps {
   siapTrail?: { type: 'LineString'; coordinates: [number, number][]; color?: string } | null;
   /** Filter: show only this inspector's points/routes, null = all */
   siapFilter?: string | null;
+  /** Si la simulación está en playing, oculta el histórico para solo ver trail animado */
+  siapIsPlaying?: boolean;
 }
 
 function computeSolarTerminator(): [number, number][] {
@@ -112,7 +114,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onRetryMap, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, ipLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, siapPlayback = null, siapTrail = null, siapFilter = null }: OsirisMapProps) {
+function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onRetryMap, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, ipLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, siapPlayback = null, siapTrail = null, siapFilter = null, siapIsPlaying = false }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -384,13 +386,21 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         ctx.beginPath(); ctx.moveTo(s*0.50, s*0.60); ctx.lineTo(s*0.35, s*0.78); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(s*0.50, s*0.60); ctx.lineTo(s*0.65, s*0.78); ctx.stroke();
       });
-      // flecha direccional para la ruta recorrida (apunta al este, MapLibre la rota sobre la línea)
+      // flecha direccional — SDF para poder teñirla del color del inspector
       if (!map.hasImage('siap-arrow')) {
         const s = 24; const c = document.createElement('canvas'); c.width=s; c.height=s;
         const ctx2 = c.getContext('2d')!;
-        ctx2.fillStyle = '#FFFFFF'; ctx2.strokeStyle='rgba(0,0,0,0.5)'; ctx2.lineWidth=1;
+        ctx2.fillStyle = '#FFFFFF'; ctx2.strokeStyle='rgba(0,0,0,0.0)'; ctx2.lineWidth=1;
+        ctx2.beginPath(); ctx2.moveTo(4,6); ctx2.lineTo(19,12); ctx2.lineTo(4,18); ctx2.closePath(); ctx2.fill();
+        map.addImage('siap-arrow', { width:s, height:s, data: new Uint8Array(ctx2.getImageData(0,0,s,s).data) }, { sdf: true } as any);
+      }
+      // arrow con borde (no-SDF) para halo si se necesita — se deja blanca
+      if (!map.hasImage('siap-arrow-white')) {
+        const s = 24; const c = document.createElement('canvas'); c.width=s; c.height=s;
+        const ctx2 = c.getContext('2d')!;
+        ctx2.fillStyle = '#FFFFFF'; ctx2.strokeStyle='rgba(0,0,0,0.55)'; ctx2.lineWidth=1.2;
         ctx2.beginPath(); ctx2.moveTo(4,6); ctx2.lineTo(19,12); ctx2.lineTo(4,18); ctx2.closePath(); ctx2.fill(); ctx2.stroke();
-        map.addImage('siap-arrow', { width:s, height:s, data: new Uint8Array(ctx2.getImageData(0,0,s,s).data) });
+        map.addImage('siap-arrow-white', { width:s, height:s, data: new Uint8Array(ctx2.getImageData(0,0,s,s).data) });
       }
 
       const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'malware-new', 'network-mesh', 'cyber-arcs', 'cyber-heads', 'cyber-impacts', 'gdelt-events', 'cf-outages', 'cf-attacks', 'siap-routes', 'siap-points', 'siap-playback', 'siap-playback-trail'];
@@ -866,12 +876,13 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.2], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
-      // ── SIAP — Recorridos inspectores (Manta) ── ya no línea continua sólida “rara”, sino guía fina + flechas
-      map.addLayer({ id: 'siap-route-casing', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#001014', 'line-width': ['interpolate',['linear'],['zoom'], 5, 4, 12, 7], 'line-opacity': 0.28 }});
-      map.addLayer({ id: 'siap-route-line', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 1.8, 12, 3.2], 'line-opacity': 0.22, 'line-dasharray': [4, 6] }});
-      map.addLayer({ id: 'siap-route-dash', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': ['interpolate',['linear'],['zoom'], 5, 1, 12, 1.6], 'line-opacity': 0.14, 'line-dasharray': [2, 8] }});
-      // Flechas sobre la ruta histórica — es la dirección que ve el inspector al seleccionar
-      map.addLayer({ id: 'siap-route-arrows', type: 'symbol', source: 'siap-routes', layout: { 'symbol-placement': 'line', 'symbol-spacing': 55, 'icon-image': 'siap-arrow', 'icon-size': 0.72, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 0.62 }});
+      // ── SIAP — Recorridos inspectores (Manta) ── sin línea continua azul: solo guía tenue + flechas continuas color inspector
+      map.addLayer({ id: 'siap-route-casing', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#001014', 'line-width': ['interpolate',['linear'],['zoom'], 5, 3.5, 12, 6], 'line-opacity': 0.18 }});
+      map.addLayer({ id: 'siap-route-line', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 1.8, 12, 3.2], 'line-opacity': 0 }});
+      map.addLayer({ id: 'siap-route-dash', type: 'line', source: 'siap-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': ['interpolate',['linear'],['zoom'], 5, 1, 12, 1.4], 'line-opacity': 0.22, 'line-dasharray': [4, 10] }});
+      // Flechas históricas continuas — color del inspector (SDF)
+      map.addLayer({ id: 'siap-route-arrows', type: 'symbol', source: 'siap-routes', layout: { 'symbol-placement': 'line', 'symbol-spacing': 32, 'icon-image': 'siap-arrow', 'icon-size': 0.78, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 0.95, 'icon-color': ['get','color'], 'icon-halo-color': '#000000', 'icon-halo-width': 0.8 }});
+      map.addLayer({ id: 'siap-route-arrows-white', type: 'symbol', source: 'siap-routes', layout: { 'symbol-placement': 'line', 'symbol-spacing': 32, 'icon-image': 'siap-arrow-white', 'icon-size': 0.78, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 0.0 }}); // reserva si se quiere contraste
       map.addLayer({ id: 'siap-point-glow', type: 'circle', source: 'siap-points', paint: { 'circle-radius': ['interpolate',['linear'],['zoom'], 8, 10, 12, 18, 16, 28], 'circle-color': ['match',['get','impacto'],'critico','#D32F2F','alto','#FF6F00','medio','#FFC400','#00C853'], 'circle-opacity': 0.18, 'circle-blur': 1 }});
       map.addLayer({ id: 'siap-point-dots', type: 'circle', source: 'siap-points', paint: { 'circle-radius': ['interpolate',['linear'],['zoom'], 8, 5, 12, 8, 16, 12], 'circle-color': ['match',['get','impacto'],'critico','#D32F2F','alto','#FF6F00','medio','#FFC400','#00C853'], 'circle-opacity': 0.95, 'circle-stroke-width': 2, 'circle-stroke-color': ['get','color'], 'circle-stroke-opacity': 0.9 }});
       // vehículo sobre el punto: moto vs persona
@@ -882,7 +893,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       map.addLayer({ id: 'siap-playback-trail', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get','color'], 'line-width': ['interpolate',['linear'],['zoom'], 5, 5, 12, 8], 'line-opacity': 1 }});
       map.addLayer({ id: 'siap-playback-trail-dash', type: 'line', source: 'siap-playback-trail', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#FFFFFF', 'line-width': 2.2, 'line-opacity': 0.65, 'line-dasharray': [1, 3] }});
       // flecha direccional sobre la ruta recorrida — más grande y frecuente para que se vea la animación
-      map.addLayer({ id: 'siap-playback-arrows', type: 'symbol', source: 'siap-playback-trail', layout: { 'symbol-placement': 'line', 'symbol-spacing': 40, 'icon-image': 'siap-arrow', 'icon-size': 0.95, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 1 }});
+      map.addLayer({ id: 'siap-playback-arrows', type: 'symbol', source: 'siap-playback-trail', layout: { 'symbol-placement': 'line', 'symbol-spacing': 32, 'icon-image': 'siap-arrow', 'icon-size': 0.95, 'icon-allow-overlap': true, 'icon-ignore-placement': true }, paint: { 'icon-opacity': 1, 'icon-color': ['get','color'], 'icon-halo-color': '#000000', 'icon-halo-width': 0.8 }});
       map.addLayer({ id: 'siap-playback-glow', type: 'circle', source: 'siap-playback', paint: { 'circle-radius': 20, 'circle-color': ['get','color'], 'circle-opacity': 0.22, 'circle-blur': 0.9 }});
       map.addLayer({ id: 'siap-playback-dot', type: 'circle', source: 'siap-playback', paint: { 'circle-radius': 9, 'circle-color': ['get','color'], 'circle-opacity': 1, 'circle-stroke-width': 2, 'circle-stroke-color': '#FFFFFF' }});
       map.addLayer({ id: 'siap-playback-icon', type: 'symbol', source: 'siap-playback', layout: { 'icon-image': ['match',['get','vehicle'],'moto','siap-moto-play','a pie','siap-walk-play','siap-moto-play'], 'icon-size': 0.95, 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map', 'icon-rotate': ['get','heading'] }, paint: { 'icon-opacity': 1 }});
@@ -2327,7 +2338,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setVis(['maritime-glow','maritime-dots','maritime-label'], activeLayers.maritime);
     setVis(['choke-glow','choke-dots','choke-label'], activeLayers.maritime);
     setVis(['ship-dots','ship-label'], activeLayers.maritime);
-    setVis(['siap-route-casing','siap-route-line','siap-route-dash','siap-route-dir-label'], (activeLayers as any).siap_routes !== false);
+    setVis(['siap-route-casing','siap-route-line','siap-route-dash','siap-route-arrows','siap-route-arrows-white','siap-route-dir-label'], (activeLayers as any).siap_routes !== false);
     setVis(['siap-point-glow','siap-point-dots','siap-point-vehicle','siap-point-num','siap-point-label'], (activeLayers as any).siap_points !== false);
     setVis(['siap-playback-trail-casing','siap-playback-trail','siap-playback-trail-dash','siap-playback-arrows','siap-playback-glow','siap-playback-dot','siap-playback-icon'], true);
     setVis(['news-glow','news-dots','news-label'], activeLayers.live_news);
@@ -2341,6 +2352,16 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     // Sweep layers always visible when data is present (controlled by useEffect)
     setVis(['sweep-connections','sweep-pulse-ring','sweep-device-glow','sweep-device-dots','sweep-device-labels'], true);
   }, [mapReady, activeLayers, setVis]);
+
+  // Durante playing, oculta el histórico para no duplicar flechas (solo se ve el trail animado)
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (siapIsPlaying) {
+      setVis(['siap-route-casing','siap-route-line','siap-route-dash','siap-route-arrows','siap-route-arrows-white','siap-route-dir-label'], false);
+    } else {
+      setVis(['siap-route-casing','siap-route-line','siap-route-dash','siap-route-arrows','siap-route-arrows-white','siap-route-dir-label'], (activeLayers as any).siap_routes !== false);
+    }
+  }, [mapReady, activeLayers, siapIsPlaying, setVis]);
 
   // IP Sweep visualization
   useEffect(() => {
@@ -2476,16 +2497,18 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     map.easeTo({ zoom: Math.max(10.5, map.getZoom()), pitch: 45, duration: 650 });
   }, [mapReady, terrainFocus, terrainEnabled]);
 
-  // Fly-to — intro Manta en 3D corto (2.5s) con pitch cinematográfico
+  // Fly-to — en 2D es plano (pitch 0) para evitar lag, en globe mantiene inclinación
   useEffect(() => {
     if (!mapReady || !mapRef.current || !flyToLocation) return;
     const isManta = flyToLocation.zoom === 13 && Math.abs(flyToLocation.lat + 0.963) < 0.02 && Math.abs(flyToLocation.lng + 80.712) < 0.02;
     if (isManta) {
-      mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: 13, pitch: 42, bearing: -12, duration: 2500, curve: 1.42, essential: true });
+      const pitch = projection === 'globe' ? 42 : 0;
+      const bearing = projection === 'globe' ? -12 : 0;
+      mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: 13, pitch, bearing, duration: 2500, curve: 1.42, essential: true });
     } else {
       mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom ?? 8, duration: 2200 });
     }
-  }, [mapReady, flyToLocation]);
+  }, [mapReady, flyToLocation, projection]);
 
   // 3D buildings are independent of the elevation renderer.
   useEffect(() => {
@@ -2841,61 +2864,14 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     return () => cancelAnimationFrame(raf);
   }, [mapReady, userLocation]);
 
-  // ── IP LOCATION DOT (ámbar, no roba cámara) — indica dónde te ve la IP ──
+  // IP LOCATION oculto a pedido — se deja el estado ipLocation pero sin pintar "Manta IP"
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
     const SRC = 'ip-location';
     const IDS = ['ip-dot-pulse', 'ip-dot', 'ip-dot-core', 'ip-label'];
-    if (!ipLocation) {
-      IDS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
-      if (map.getSource(SRC)) map.removeSource(SRC);
-      return;
-    }
-    const { lat, lng, city, country } = ipLocation;
-    const point: any = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { city: city || '', country: country || '' }, geometry: { type: 'Point', coordinates: [lng, lat] } }] };
-    if (!map.getSource(SRC)) map.addSource(SRC, { type: 'geojson', data: point });
-    else (map.getSource(SRC) as maplibregl.GeoJSONSource).setData(point);
-    if (!map.getLayer('ip-dot-pulse')) {
-      map.addLayer({ id: 'ip-dot-pulse', type: 'circle', source: SRC, paint: { 'circle-radius': 14, 'circle-color': '#FFB300', 'circle-opacity': 0.22 } });
-    }
-    if (!map.getLayer('ip-dot')) {
-      map.addLayer({ id: 'ip-dot', type: 'circle', source: SRC, paint: { 'circle-radius': 7, 'circle-color': '#FFFFFF' } });
-    }
-    if (!map.getLayer('ip-dot-core')) {
-      map.addLayer({ id: 'ip-dot-core', type: 'circle', source: SRC, paint: { 'circle-radius': 5, 'circle-color': '#FFB300', 'circle-stroke-width': 1.5, 'circle-stroke-color': '#FFFFFF' } });
-    }
-    if (!map.getLayer('ip-label')) {
-      map.addLayer({ id: 'ip-label', type: 'symbol', source: SRC, layout: { 'text-field': ['concat', ['coalesce', ['get','city'], 'TÚ'], ' (IP)'], 'text-size': 10, 'text-font': ['JetBrains Mono Bold','Open Sans Bold'], 'text-offset': [0, 1.8], 'text-allow-overlap': true }, paint: { 'text-color': '#FFB300', 'text-halo-color': '#000', 'text-halo-width': 1.5 } });
-    }
-    // click en el punto IP → vuela suave (a demanda, no auto)
-    const onIpClick = (e: any) => {
-      if (!e.features?.length) return;
-      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 9), duration: 1800 });
-    };
-    map.on('click', 'ip-dot-core', onIpClick);
-    map.on('mouseenter', 'ip-dot-core', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'ip-dot-core', () => { map.getCanvas().style.cursor = ''; });
-    return () => {
-      map.off('click', 'ip-dot-core', onIpClick);
-    };
-  }, [mapReady, ipLocation]);
-
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !ipLocation) return;
-    const map = mapRef.current;
-    let raf = 0;
-    const started = performance.now();
-    const tick = (now: number) => {
-      if (map.getLayer('ip-dot-pulse')) {
-        const t = ((now - started) % 2500) / 2500;
-        map.setPaintProperty('ip-dot-pulse', 'circle-radius', 14 + t * 26);
-        map.setPaintProperty('ip-dot-pulse', 'circle-opacity', 0.22 * (1 - t));
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    IDS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+    if (map.getSource(SRC)) map.removeSource(SRC);
   }, [mapReady, ipLocation]);
 
   // ── FOLLOW MODE ──
