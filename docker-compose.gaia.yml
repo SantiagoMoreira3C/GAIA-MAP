@@ -1,14 +1,14 @@
 # GAIA-MAP — override para host gaia0 (Linux) sin chocar con lo ya ocupado.
 # Ocupados en gaia0: 8000, 9000->3000, 5432, 5000, 8554-8555, 8971,
 # 1935, 8889, 9996-9997, 8189/udp, 8080.
-# Uso:
-#   docker compose -f docker-compose.yml -f docker-compose.gaia.yml up -d --build
+# Uso v2: docker compose -f docker-compose.yml -f docker-compose.gaia.yml up -d --build
+# Uso v1 : docker-compose -f docker-compose.yml -f docker-compose.gaia.yml up -d --build
 # Resultado:
 #   Web GAIA  -> http://<host>:3002
 #   Cache     -> http://<host>:8081
 #   HLS       -> http://<host>:8888 (player) / RTSP ingest 8556
 #   Intel     -> http://<host>:4000
-name: gaia-map
+version: "3.8"
 services:
   osiris:
     container_name: gaia-map

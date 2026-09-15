@@ -1,4 +1,4 @@
-name: osiris
+version: "3.8"
 services:
   osiris:
     # Builds locally from the Dockerfile so you always run the cloned code.
@@ -13,11 +13,10 @@ services:
     # Host port is configurable via OSIRIS_PORT in .env (defaults to 3000).
     ports:
       - "${OSIRIS_PORT:-3000}:3000"
-    # Optional API keys / scanner backend — copy .env.template to .env and
-    # fill in what you need. Missing file is ignored (keyless feeds still work).
+    # Requiere `.env` (cp .env.example .env). Sintaxis corta = compatible
+    # con docker-compose v1 y con el plugin `docker compose` v2.
     env_file:
-      - path: .env
-        required: false
+      - .env
     environment:
       - NODE_OPTIONS=--dns-result-order=ipv4first
       - NODE_ENV=production
