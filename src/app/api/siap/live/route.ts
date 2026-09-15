@@ -22,6 +22,15 @@ interface LiveEntry {
 const registry = new Map<string, LiveEntry>();
 const VALID_IDS = new Set(['SIAP-01', 'SIAP-02', 'SIAP-03']);
 
+function isDockerNet(addr: string): boolean {
+  // Redes bridge de Docker/Compose (172.16.0.0/12). No son la LAN del host.
+  if (addr.startsWith('172.')) {
+    const second = Number(addr.split('.')[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return false;
+}
+
 function getLanIp(): string | null {
   const ifaces = os.networkInterfaces();
   const sorted = Object.entries(ifaces).sort(([a],[b])=>{
@@ -34,6 +43,7 @@ function getLanIp(): string | null {
       if(a.family!=='IPv4'||a.internal) continue;
       if(a.address.startsWith('127.')||a.address.startsWith('169.254.')) continue;
       if(a.address.startsWith('192.168.192.')||a.address.startsWith('172.18.')||a.address.startsWith('172.19.')) continue;
+      if (isDockerNet(a.address)) continue;
       if(a.address.startsWith('192.168.')||a.address.startsWith('10.')) return a.address;
     }
   }
@@ -44,12 +54,17 @@ function inferHlsUrls(inspectorId: string, req: Request) {
   const lanIp = getLanIp() || 'localhost';
   const host = req.headers.get('host') || `${lanIp}:3000`;
   const proto = req.headers.get('x-forwarded-proto') || 'http';
+  // Puertos públicos (mapeo del host). En gaia0 difieren de los internos
+  // (RTSP 8556, HLS 8891, WebRTC 8892) — vienen de .env vía compose.
+  const rtspPort = process.env.RTSP_PORT || '8554';
+  const hlsPort = process.env.HLS_PORT || '8888';
+  const webrtcPort = process.env.WEBRTC_PORT || '8889';
   return {
-    hlsUrl: `http://${lanIp}:8888/${inspectorId}/index.m3u8`,
+    hlsUrl: `http://${lanIp}:${hlsPort}/${inspectorId}/index.m3u8`,
     proxyHlsUrl: `${proto}://${host}/api/siap/stream/${inspectorId}/index.m3u8`,
-    whepUrl: `http://${lanIp}:8889/${inspectorId}/whep`,
+    whepUrl: `http://${lanIp}:${webrtcPort}/${inspectorId}/whep`,
     proxyWhepUrl: `${proto}://${host}/api/siap/whep/${inspectorId}/whep`,
-    rtspUrl: `rtsp://${lanIp}:8554/${inspectorId}`,
+    rtspUrl: `rtsp://${lanIp}:${rtspPort}/${inspectorId}`,
   };
 }
 
@@ -114,14 +129,22 @@ async function probeHls(hlsUrl: string): Promise<boolean> {
     }
   };
 
-  // 1) directo con lanIp
+  // 1) nombre de servicio docker (funciona dentro del compose aunque el host
+  //    mapee otros puertos públicos). 2) loopback. 3) lanIp directa.
+  const internalUrl = `http://siap-mediamtx:8888/${inspectorFrom(hlsUrl)}/index.m3u8`;
+  if (await tryFetch(internalUrl) || await tryFetch(internalUrl, true)) return true;
   if (await tryFetch(hlsUrl)) return true;
   // 2) con cookieCheck forzado
   if (await tryFetch(hlsUrl, true)) return true;
   // 3) fallback local
-  const localUrl = hlsUrl.replace(/http:\/\/[^/]+:8888/, 'http://127.0.0.1:8888');
+  const localUrl = hlsUrl.replace(/http:\/\/[^/]+:\d+/, 'http://127.0.0.1:8888');
   if (localUrl !== hlsUrl && (await tryFetch(localUrl) || await tryFetch(localUrl, true))) return true;
   return false;
+}
+
+function inspectorFrom(hlsUrl: string): string {
+  const m = hlsUrl.match(/\/([^/]+)\/index\.m3u8/);
+  return m ? m[1] : '';
 }
 
 export async function GET(req: Request) {

@@ -9,6 +9,9 @@ services:
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_AUTO_ORBIT=${OSIRIS_AUTO_ORBIT:-1}
+        - NEXT_PUBLIC_RTSP_PORT=${RTSP_PORT:-8554}
+        - NEXT_PUBLIC_HLS_PORT=${HLS_PORT:-8888}
+        - NEXT_PUBLIC_WEBRTC_PORT=${WEBRTC_PORT:-8889}
     container_name: osiris
     # Host port is configurable via OSIRIS_PORT in .env (defaults to 3000).
     ports:
@@ -24,6 +27,10 @@ services:
       - HOSTNAME=0.0.0.0
       # Órbita 3D automática (1=activa). Se expone al cliente vía build arg.
       - NEXT_PUBLIC_AUTO_ORBIT=${OSIRIS_AUTO_ORBIT:-1}
+      # Puertos públicos del host para que /api/siap/live anuncie URLs correctas.
+      - RTSP_PORT=${RTSP_PORT:-8554}
+      - HLS_PORT=${HLS_PORT:-8888}
+      - WEBRTC_PORT=${WEBRTC_PORT:-8889}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

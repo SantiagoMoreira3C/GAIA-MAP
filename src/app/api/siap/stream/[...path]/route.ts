@@ -15,6 +15,7 @@ function getLanIp(): string {
       if(a.family!=='IPv4'||a.internal) continue;
       if(a.address.startsWith('127.')||a.address.startsWith('169.254.')) continue;
       if(a.address.startsWith('192.168.192.')||a.address.startsWith('172.18.')||a.address.startsWith('172.19.')) continue;
+      if(a.address.startsWith('172.')) { const s2=Number(a.address.split('.')[1]); if(s2>=16&&s2<=31) continue; }
       if(a.address.startsWith('192.168.')||a.address.startsWith('10.')) return a.address;
     }
   }

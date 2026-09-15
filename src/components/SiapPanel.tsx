@@ -68,7 +68,8 @@ export default function SiapPanel({ inspectors, selectedId, onSelect, onPointCli
   }, []);
   useEffect(() => { fetchLive(true); }, [selected?.id]);
   const live = selected ? liveStates[selected.id] : null;
-  const effectiveRtsp = selected ? (rtspInputs[selected.id] || live?.rtspUrl || (lanIp ? `rtsp://${lanIp}:8554/${selected.id}` : `rtsp://192.168.40.183:8554/${selected?.id}`)) : '';
+  const rtspPort = process.env.NEXT_PUBLIC_RTSP_PORT || '8554';
+  const effectiveRtsp = selected ? (rtspInputs[selected.id] || live?.rtspUrl || (lanIp ? `rtsp://${lanIp}:${rtspPort}/${selected.id}` : `rtsp://192.168.40.188:${rtspPort}/${selected?.id}`)) : '';
   const hlsUrl = live?.proxyHlsUrl || null;
   const whepUrl = live?.whepUrl || null;
   const proxyWhepUrl = live?.proxyWhepUrl || null;
