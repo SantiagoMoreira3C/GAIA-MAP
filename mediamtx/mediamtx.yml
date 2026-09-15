@@ -35,11 +35,7 @@ authInternalUsers:
       - action: api
         path:
 
-# HLS fluido — segmentos/partes estables evitan tirones por bitrate variable del móvil
-hlsVariant: lowLatency
-hlsSegmentDuration: 1s
-hlsPartDuration: 200ms
-hlsSegmentCount: 7
+# HLS default MediaMTX (estable en http) — sin forzar duraciones, evita 404 y saltos 403ms->9s
 # Permitir CORS HLS para navegador
 hlsAllowOrigins: ["*"]
 webrtcAllowOrigins: ["*"]

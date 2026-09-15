@@ -13,6 +13,7 @@ import CctvPreviews, { type PreviewCamera } from '@/components/CctvPreviews';
 import MapControls from '@/components/MapControls';
 import LiveNewsPreviews, { type PreviewFeed } from '@/components/LiveNewsPreviews';
 import { attachTerrain, type TerrainStatus } from '@/lib/map-terrain';
+import { createAutoOrbit } from '@/lib/map-auto-orbit';
 import { watchMapStartup, type MapStartupStatus } from '@/lib/map-startup';
 import { applyMapProjection } from '@/lib/map-projection';
 
@@ -47,6 +48,11 @@ interface OsirisMapProps {
   sweepData?: any;
   scanTargets?: any[];
   demoMode?: boolean;
+  /** Giro 3D automático (órbita de bearing). Default true; demoMode lo fuerza. */
+  autoOrbit?: boolean;
+  /** Velocidad de órbita en grados/segundo. Default 5. */
+  autoOrbitSpeed?: number;
+  onAutoOrbitChange?: (orbiting: boolean) => void;
   theme?: 'core' | 'ghost';
   drawnPolygons?: Array<{ id: string; name: string; geojson: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.LineString>; color: string }>;
   arcgisLayers?: Array<{ id: string; title: string; geojson: any; color?: string; opacity?: number }>;
@@ -114,7 +120,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onRetryMap, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, ipLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, siapPlayback = null, siapTrail = null, siapFilter = null, siapIsPlaying = false }: OsirisMapProps) {
+function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onRetryMap, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, autoOrbit = true, autoOrbitSpeed = 5, onAutoOrbitChange, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, route = null, userLocation = null, ipLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, siapPlayback = null, siapTrail = null, siapFilter = null, siapIsPlaying = false }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -199,52 +205,31 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
 
-    // ── DEMO MODE SPINNING ──
-    let spinReq: number | undefined = undefined;
-    let isSpinning = false;
-    
-    const startSpinning = () => {
-      if (!map) return;
-      isSpinning = true;
-      let lastTime = performance.now();
-      
-      const frame = (time: number) => {
-        if (!isSpinning) return;
-        
-        // Only spin if the user is not actively dragging or zooming the map
-        if (!map.isMoving() && !map.isZooming()) {
-          const dt = time - lastTime;
-          const center = map.getCenter();
-          // Adjust spin speed: 0.5 degrees per second
-          center.lng += (0.5 * dt) / 1000;
-          map.setCenter(center);
-        }
-        
-        lastTime = time;
-        spinReq = requestAnimationFrame(frame);
-      };
-      
-      spinReq = requestAnimationFrame(frame);
-    };
-
-    if (demoMode) {
-      startSpinning();
-    } else {
-      isSpinning = false;
-      if (spinReq) cancelAnimationFrame(spinReq);
+    // ── ÓRBITA 3D AUTOMÁTICA (siempre girando, enfoca Manta en 3D) ──
+    // demoMode fuerza órbita por compatibilidad; autoOrbit la controla en UI.
+    const enabled = autoOrbit || demoMode;
+    if (!enabled) {
+      onAutoOrbitChange?.(false);
+      return;
     }
-
+    const orbit = createAutoOrbit(map, {
+      speedDegPerSec: autoOrbitSpeed,
+      pitch: 55,
+      resumeDelayMs: 3000,
+      // Pausa al navegar, seguir usuario, dibujar o ver ruta.
+      shouldPause: () => navigating || followUser || drawMode !== null || route !== null,
+      onStateChange: onAutoOrbitChange,
+    });
     return () => {
-      isSpinning = false;
-      if (spinReq) cancelAnimationFrame(spinReq);
+      orbit.dispose();
       if (typeof window !== 'undefined' && (window as any)._globeSpinTimer) {
         clearInterval((window as any)._globeSpinTimer);
       }
     };
-  }, [mapReady, demoMode]);
+  }, [mapReady, autoOrbit, autoOrbitSpeed, demoMode, navigating, followUser, drawMode, route, onAutoOrbitChange]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -2497,14 +2482,13 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     map.easeTo({ zoom: Math.max(10.5, map.getZoom()), pitch: 45, duration: 650 });
   }, [mapReady, terrainFocus, terrainEnabled]);
 
-  // Fly-to — en 2D es plano (pitch 0) para evitar lag, en globe mantiene inclinación
+  // Fly-to — Manta siempre en 3D (pitch 55) para órbita virtual; resto igual.
   useEffect(() => {
     if (!mapReady || !mapRef.current || !flyToLocation) return;
-    const isManta = flyToLocation.zoom === 13 && Math.abs(flyToLocation.lat + 0.963) < 0.02 && Math.abs(flyToLocation.lng + 80.712) < 0.02;
+    const isManta = Math.abs(flyToLocation.lat + 0.963) < 0.05 && Math.abs(flyToLocation.lng + 80.712) < 0.05;
     if (isManta) {
-      const pitch = projection === 'globe' ? 42 : 0;
-      const bearing = projection === 'globe' ? -12 : 0;
-      mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: 13, pitch, bearing, duration: 2500, curve: 1.42, essential: true });
+      const pitch = projection === 'globe' ? 55 : 45;
+      mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom ?? 13.5, pitch, bearing: -12, duration: 2500, curve: 1.42, essential: true });
     } else {
       mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom ?? 8, duration: 2200 });
     }

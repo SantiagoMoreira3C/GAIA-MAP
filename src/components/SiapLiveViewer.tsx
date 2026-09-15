@@ -33,18 +33,11 @@ export default function SiapLiveViewer({ inspectorId, inspectorName, color, hlsU
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
-        maxBufferSize: 60 * 1000 * 1000,
+        lowLatencyMode: false,
+        backBufferLength: 30,
+        maxBufferLength: 10,
         liveSyncDurationCount: 3,
-        liveMaxLatencyDurationCount: 8,
-        maxLiveSyncPlaybackRate: 1.5,
-        liveDurationInfinity: true,
-        highBufferWatchdogPeriod: 1,
-        nudgeOffset: 0.2,
-        nudgeMaxRetry: 8,
+        liveMaxLatencyDurationCount: 5,
       });
       hlsRef.current = hls;
       hls.loadSource(hlsUrl);
@@ -104,9 +97,10 @@ export default function SiapLiveViewer({ inspectorId, inspectorName, color, hlsU
     }
     const video = videoRef.current;
 
-    // WebRTC primero (<500ms), HLS como fallback
+    // HTTP solo: HLS vía proxy (200 en 200ms) — WebRTC deshabilitado para no dejar negro 10s
     const whep = proxyWhepUrl || whepUrl;
-    const canWebRTC = !!whep && typeof RTCPeerConnection !== 'undefined';
+    const fallbackWhep = whepUrl && proxyWhepUrl && whep !== proxyWhepUrl ? (whep === whepUrl ? proxyWhepUrl : whepUrl) : null;
+    const canWebRTC = false;
 
     if (canWebRTC && whep) {
       let cancelled = false;
@@ -134,12 +128,20 @@ export default function SiapLiveViewer({ inspectorId, inspectorName, color, hlsU
           };
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          const res = await fetch(whep, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
-            body: offer.sdp,
-          });
-          if (!res.ok) throw new Error(`WHEP ${res.status}`);
+          let res: Response | null = null;
+          let lastErr = '';
+          for (const url of [whep, fallbackWhep].filter(Boolean) as string[]) {
+            try {
+              const r = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: offer.sdp,
+              });
+              if (r.ok) { res = r; break; }
+              lastErr = `WHEP ${r.status} at ${url}`;
+            } catch (e) { lastErr = String(e); }
+          }
+          if (!res || !res.ok) throw new Error(lastErr || `WHEP failed`);
           const answer = await res.text();
           await pc.setRemoteDescription({ type: 'answer', sdp: answer });
           // si en 4s no llega track, fallback a HLS

@@ -275,6 +275,17 @@ export default function Dashboard() {
   const [scanTargets, setScanTargets] = useState<any[]>([]);
   const [drawnPolygons, setDrawnPolygons] = useState<DrawnShape[]>([]);
   const [demoMode, setDemoMode] = useState(false);
+  // ── ÓRBITA 3D automática: siempre girando sobre Manta por defecto ──
+  // Se lee de ?orbit=0/1 y NEXT_PUBLIC_AUTO_ORBIT para Docker/kiosko.
+  const [autoOrbit, setAutoOrbit] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const q = new URLSearchParams(window.location.search).get('orbit');
+      if (q === '0' || q === 'off') return false;
+      if (q === '1' || q === 'on') return true;
+    }
+    return process.env.NEXT_PUBLIC_AUTO_ORBIT !== '0';
+  });
+  const [orbiting, setOrbiting] = useState(false);
   const [osirisTheme, setOsirisTheme] = useState<'core'|'ghost'>('core');
   const [ipLocation, setIpLocation] = useState<{ lat: number; lng: number; city?: string; country?: string } | null>(null);
   // ── GAIA SIAP ──
@@ -1335,6 +1346,9 @@ export default function Dashboard() {
           sweepData={sweepData}
           scanTargets={scanTargets}
           demoMode={demoMode}
+          autoOrbit={autoOrbit}
+          autoOrbitSpeed={5}
+          onAutoOrbitChange={setOrbiting}
           theme={osirisTheme}
           arcgisLayers={arcgisLayers.filter(l => l.visible).map(l => ({ id: l.id, title: l.title, geojson: l.geojson, color: l.color, opacity: l.opacity }))}
           onMapCenter={setMapCenter}
@@ -1558,6 +1572,20 @@ export default function Dashboard() {
 
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
+        {/* ÓRBITA 3D — giro automático sobre Manta, pausa al interactuar */}
+        <div className="relative group">
+          <button onClick={() => setAutoOrbit((v: boolean) => !v)} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${autoOrbit ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title={autoOrbit ? `ÓRBITA 3D ACTIVA${orbiting ? ' — girando' : ' — en pausa (retoma sola)'}` : 'ÓRBITA 3D PAUSADA — clic para girar'} aria-label="Órbita 3D automática" aria-pressed={autoOrbit}>
+            <Globe className={`w-4 h-4 ${autoOrbit ? 'text-[#17A7D2]' : 'text-white/60'} ${orbiting ? 'animate-[spin_6s_linear_infinite]' : ''}`} />
+            {autoOrbit && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-1 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-current text-[#17A7D2]"
+              />
+            )}
+          </button>
+          <span className="absolute right-11 top-1/2 -translate-y-1/2 px-2 py-1 text-[9px] font-mono tracking-wider text-white/80 bg-black/80 backdrop-blur-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none">{autoOrbit ? (orbiting ? 'ÓRBITA 3D: GIRANDO' : 'ÓRBITA 3D: EN PAUSA') : 'ÓRBITA 3D: OFF'}</span>
+        </div>
+        <div className="w-4 h-px bg-white/10 mx-auto" />
         {/* SIAP — MOSTRAR / OCULTAR (reemplaza botones flotantes inferiores) */}
         <div className="relative group">
           <button onClick={() => setShowSiap((v: boolean) => !v)} className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${showSiap ? 'bg-[#17A7D2]/20' : 'hover:bg-white/10'}`} title="SIAP — MOSTRAR / OCULTAR panel inspecciones Manta" aria-label="SIAP — MOSTRAR / OCULTAR" aria-expanded={showSiap}>

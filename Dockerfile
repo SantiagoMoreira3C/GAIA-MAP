@@ -5,6 +5,8 @@ RUN npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_AUTO_ORBIT=1
+ENV NEXT_PUBLIC_AUTO_ORBIT=$NEXT_PUBLIC_AUTO_ORBIT
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

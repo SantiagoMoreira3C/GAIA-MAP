@@ -51,8 +51,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
         cache: 'no-store',
         signal: AbortSignal.timeout(5000),
         headers: {
-          // Reenviar range si es segmento
           ...(req.headers.get('range') ? { Range: req.headers.get('range')! } : {}),
+          ...(req.headers.get('cookie') ? { Cookie: req.headers.get('cookie')! } : {}),
         },
       });
 
@@ -81,11 +81,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
       };
       const cl = upstream.headers.get('content-length');
       if (cl) headers['Content-Length'] = cl;
+      const setCookie = upstream.headers.get('set-cookie');
+      if (setCookie) headers['Set-Cookie'] = setCookie;
 
       // Para m3u8, reescribir URLs absolutas si las hubiera (MediaMTX usa relativas, pero por si acaso)
       if (subPath.endsWith('.m3u8')) {
         const text = await upstream.text();
-        // Las URLs en m3u8 son relativas; no hace falta reescribir. Pero aseguramos que no expongan lanIp interno.
         return new NextResponse(text, { status: 200, headers });
       }
 
