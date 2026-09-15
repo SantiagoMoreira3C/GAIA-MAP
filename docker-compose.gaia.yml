@@ -1,31 +1,37 @@
-# GAIA-MAP — override para host gaia0 (Linux) sin chocar con lo ya ocupado.
+# GAIA-MAP — override para host gaia0 (Linux).
 # Ocupados en gaia0: 8000, 9000->3000, 5432, 5000, 8554-8555, 8971,
 # 1935, 8889, 9996-9997, 8189/udp, 8080.
-# Uso v2: docker compose -f docker-compose.yml -f docker-compose.gaia.yml up -d --build
-# Uso v1 : docker-compose -f docker-compose.yml -f docker-compose.gaia.yml up -d --build
+#
+# OPCIÓN A (recomendada, v1 y v2): sin override, solo variables en .env:
+#   cp .env.gaia .env
+#   docker-compose up -d --build
+#   # o: docker compose up -d --build
+#
+# OPCIÓN B (solo plugin `docker compose` v2, NO el `docker-compose` v1):
+#   docker compose -f docker-compose.yml -f docker-compose.gaia.yml up -d --build
 # Resultado:
 #   Web GAIA  -> http://<host>:3002
 #   Cache     -> http://<host>:8081
-#   HLS       -> http://<host>:8888 (player) / RTSP ingest 8556
+#   RTSP      -> <host>:8556   HLS -> http://<host>:8891
+#   WebRTC    -> <host>:8892   MTX API -> <host>:9998
 #   Intel     -> http://<host>:4000
-version: "3.8"
 services:
   osiris:
     container_name: gaia-map
-    ports:
+    ports: !reset
       - "3002:3000"
   osiris-cache:
     container_name: gaia-map-cache
-    ports:
+    ports: !reset
       - "8081:8080"
   siap-mediamtx:
     container_name: gaia-mediamtx
-    ports:
+    ports: !reset
       - "8556:8554"   # RTSP (8554-8555 ocupados por frigate)
       - "8891:8888"   # HLS playback
       - "8892:8889"   # WebRTC (8889 ocupado por abinn)
       - "9998:9997"   # API control (9997 ocupado por abinn)
   osiris-intel:
     container_name: gaia-intel
-    ports:
+    ports: !reset
       - "4000:4000"

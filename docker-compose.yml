@@ -34,7 +34,7 @@ services:
     image: nginx:alpine
     container_name: osiris-cache
     ports:
-      - "8080:8080"
+      - "${CACHE_PORT:-8080}:8080"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - nginx-cache:/var/cache/nginx
@@ -50,10 +50,10 @@ services:
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
     ports:
-      - "8554:8554"   # RTSP - ingest desde Larix (admin/admin)
-      - "8888:8888"   # HLS - playback web
-      - "8889:8889"   # WebRTC WHEP (futuro baja latencia)
-      - "9997:9997"   # API control
+      - "${RTSP_PORT:-8554}:8554"   # RTSP - ingest desde Larix (admin/admin)
+      - "${HLS_PORT:-8888}:8888"   # HLS - playback web
+      - "${WEBRTC_PORT:-8889}:8889"   # WebRTC WHEP (futuro baja latencia)
+      - "${MTX_API_PORT:-9997}:9997"   # API control
     restart: unless-stopped
     networks:
       - default
@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
     container_name: osiris-intel
     ports:
-      - "4000:4000"
+      - "${INTEL_PORT:-4000}:4000"
     restart: unless-stopped
     networks:
       - default
